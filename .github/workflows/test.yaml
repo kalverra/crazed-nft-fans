@@ -24,7 +24,9 @@ jobs:
           # Optional: pass GITHUB_TOKEN to avoid rate limiting.
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Tests
-        run: make test_fancy
+        run: |
+          set -euo pipefail
+	        go test -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:

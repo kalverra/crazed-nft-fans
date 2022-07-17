@@ -1,7 +1,7 @@
 # Crazed NFT Fans
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/kalverra/crazed-nft-fans.svg)](https://pkg.go.dev/github.com/kalverra/crazed-nft-fans)
-[![Tests](https://github.com/kalverra/crazed-nft-fans/workflows/test/badge.svg)](https://github.com/kalverra/crazed-nft-fans/actions?workflow=test)
+[![Tests](https://github.com/kalverra/crazed-nft-fans/actions/workflows/test.yaml/badge.svg)](https://github.com/kalverra/crazed-nft-fans/actions/workflows/test.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kalverra/crazed-nft-fans)](https://goreportcard.com/report/github.com/kalverra/crazed-nft-fans)
 [![codecov](https://codecov.io/gh/kalverra/crazed-nft-fans/branch/main/graph/badge.svg)](https://codecov.io/gh/kalverra/crazed-nft-fans)
 [![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/kalverra/crazed-nft-fans/main/LICENSE)

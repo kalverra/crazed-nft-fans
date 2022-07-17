@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/ethereum/go-ethereum v1.10.20
-	github.com/google/uuid v1.2.0
+	github.com/google/uuid v1.3.0
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.7.2
 )

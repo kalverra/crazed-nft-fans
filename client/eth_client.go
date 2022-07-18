@@ -84,6 +84,9 @@ func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash)
 	}
 	newBlocks := make(chan *types.Header)
 	sub, err := c.innerClient.SubscribeNewHead(context.Background(), newBlocks)
+	if err != nil {
+		return isPending, err
+	}
 
 	for {
 		select {

@@ -9,7 +9,7 @@ on:
 jobs:
   unit:
     services:
-      hardhat:
+      test-geth:
         image: kalverra/test-geth
         ports:
           - 8545:8545

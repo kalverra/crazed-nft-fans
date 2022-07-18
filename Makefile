@@ -32,22 +32,22 @@ test_integration: clean_test_node start_test_node
 	set -euo pipefail
 
 	go test -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
-	-docker rm --force test_geth
+	-docker rm --force test-geth
 
 start_test_node:
-	docker build -t kalverra/test_geth -f Dockerfile.test_geth .
-	docker run --name test_geth -d -p 8545:8545 -p 8546:8546 test_geth
+	docker build -t kalverra/test-geth -f Dockerfile.test-geth .
+	docker run --name test-geth -d -p 8545:8545 -p 8546:8546 kalverra/test-geth
 
 clean_test_node:
 	echo "Cleaning Up Test Env"
-	-docker rm --force test_geth
+	-docker rm --force test-geth
 
 start_realistic_node:
-	docker build -t kalverra/realistic_geth -f Dockerfile.realistic_geth .
-	docker run --rm --name realistic_geth -d -p 8545:8545 -p 8546:8546 realistic_geth
+	docker build -t kalverra/realistic-geth -f Dockerfile.realistic-geth .
+	docker run --rm --name realistic-geth -d -p 8545:8545 -p 8546:8546 kalverra/realistic-geth
 
 clean_realistic_node:
-	-docker rm --force realistic_geth
+	-docker rm --force realistic-geth
 
 # Requires the blockscout repo cloned in a nearby folder
 start_blockscout:

@@ -35,7 +35,7 @@ test_integration: clean_test_node start_test_node
 	-docker rm --force test_geth
 
 start_test_node:
-	docker build -t test_geth -f Dockerfile.test_geth .
+	docker build -t kalverra/test_geth -f Dockerfile.test_geth .
 	docker run --name test_geth -d -p 8545:8545 -p 8546:8546 test_geth
 
 clean_test_node:
@@ -43,7 +43,7 @@ clean_test_node:
 	-docker rm --force test_geth
 
 start_realistic_node:
-	docker build -t realistic_geth -f Dockerfile.realistic_geth .
+	docker build -t kalverra/realistic_geth -f Dockerfile.realistic_geth .
 	docker run --rm --name realistic_geth -d -p 8545:8545 -p 8546:8546 realistic_geth
 
 clean_realistic_node:

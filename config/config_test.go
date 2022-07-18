@@ -10,8 +10,6 @@ import (
 )
 
 func TestRead(t *testing.T) {
-	t.Parallel()
-
 	http := "http://url.com"
 	ws := "ws://url.com/ws"
 	chainId := uint64(420)

@@ -32,5 +32,9 @@ func ReadConfig() (*Config, error) {
 	}
 	conf.BigChainID = new(big.Int).SetUint64(conf.ChainID)
 	conf.FundingPrivateKey, err = crypto.HexToECDSA(conf.FundingKey)
+	if err != nil {
+		return nil, err
+	}
+	Current = &conf
 	return &conf, err
 }

@@ -15,7 +15,7 @@ jobs:
           - 8545:8545
           - 8546:8546
         options: >-
-          --health-cmd "curl -X POST --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":31337}' http://localhost:8545"
+          --health-cmd "curl -X POST --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":31337}' http://0.0.0.0:8545"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5

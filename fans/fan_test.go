@@ -8,6 +8,8 @@ import (
 )
 
 func TestNewFan(t *testing.T) {
+	t.Parallel()
+
 	fan, err := fans.NewFan()
 
 	require.NoError(t, err, "Error creating new fan")

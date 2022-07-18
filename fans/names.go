@@ -25,6 +25,9 @@ var firstNames = []string{
 	"Stilgar",
 	"Kendrick",
 	"Childish",
+	"Connor",
+	"Adam",
+	"Meg",
 }
 
 var lastNames = []string{
@@ -35,4 +38,6 @@ var lastNames = []string{
 	"Juels",
 	"Lamar",
 	"Gambino",
+	"Hite",
+	"Hamrick",
 }

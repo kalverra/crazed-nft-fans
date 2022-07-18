@@ -30,7 +30,7 @@ test_race:
 test_integration: clean_test_node start_test_node
 	go install github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest	
 	set -euo pipefail
-	
+
 	go test -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
 	-docker rm --force test_geth
 
@@ -51,6 +51,7 @@ clean_realistic_node:
 
 # Requires the blockscout repo cloned in a nearby folder
 start_blockscout:
+	export COIN=ETH && \
 	export ETHEREUM_JSONRPC_VARIANT=geth && \
 	export ETHEREUM_JSONRPC_HTTP_URL=http://host.docker.internal:8545 && \
 	export ETHEREUM_JSONRPC_WS_URL=ws://host.docker.internal:8546 && \

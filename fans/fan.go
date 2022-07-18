@@ -1,3 +1,4 @@
+// Package fans details the actions of each crazed fan
 package fans
 
 import (

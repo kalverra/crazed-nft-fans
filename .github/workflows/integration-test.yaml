@@ -15,7 +15,7 @@ jobs:
           - 8545:8545
           - 8546:8546
         options: >-
-          --health-cmd "curl -X POST --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":1337}' http://0.0.0.0:8545"
+          --health-cmd "curl http://0.0.0.0:8545" -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":1337}' 
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -43,4 +43,3 @@ jobs:
         with:
           files: ./profile.cov
           name: codecov-umbrella 
-

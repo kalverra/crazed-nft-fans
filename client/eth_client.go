@@ -28,6 +28,11 @@ func NewClient(wsURL string) (*EthClient, error) {
 	}, err
 }
 
+// SuggestNonce suggests a nonce to use for sending a transaction
+func (c *EthClient) SuggestNonce(account common.Address) (uint64, error) {
+	return c.innerClient.PendingNonceAt(context.Background(), account)
+}
+
 // SendTransaction sends an eth transaction
 func (c *EthClient) SendTransaction(
 	privateKey *ecdsa.PrivateKey,
@@ -72,6 +77,9 @@ func (c *EthClient) SendTransaction(
 		Str("From", fromAddr.Hex()).
 		Str("To", toAddress.Hex()).
 		Str("Amount", amount.String()).
+		Uint64("Gas Tip Cap", suggestedGasTipCap.Uint64()).
+		Uint64("Gas Fee Cap", gasFeeCap.Uint64()).
+		Uint64("Nonce", nonce).
 		Msg("Sending Transaction")
 	return tx.Hash(), c.innerClient.SendTransaction(context.Background(), tx)
 }

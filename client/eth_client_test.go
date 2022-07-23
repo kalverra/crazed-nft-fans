@@ -44,16 +44,22 @@ func TestConnectClient(t *testing.T) {
 }
 
 func TestSendTx(t *testing.T) {
+	to := common.HexToAddress(toAddress)
 	ethClient, err := client.NewClient(conf.WS)
 	require.NoError(t, err, "Error connecting client")
 	require.NotNil(t, ethClient, "Nil client")
 	fundingAddr, err := client.PrivateKeyToAddress(conf.FundingPrivateKey)
 	require.NoError(t, err, "Error getting funding key address")
-	fundingBalance, err := ethClient.BalanceAt(fundingAddr)
-	require.NoError(t, err, "Error retrieving funding key balance")
-	require.Equal(t, fundingBalance.Cmp(big.NewInt(0)), 1, "Funding balance is 0 or less")
 
-	hash, err := ethClient.SendTransaction(conf.FundingPrivateKey, common.HexToAddress(toAddress), 1, big.NewInt(0), big.NewFloat(1))
+	startingFromBalance, err := ethClient.BalanceAt(fundingAddr)
+	require.NoError(t, err, "Error retrieving balance")
+	require.Equal(t, startingFromBalance.Cmp(big.NewInt(0)), 1, "Funding balance is 0 or less")
+	startingToBalance, err := ethClient.BalanceAt(to)
+	require.NoError(t, err, "Error retrieving balance")
+
+	nonce, err := ethClient.SuggestNonce(to)
+	require.NoError(t, err, "Error suggesting nonce")
+	hash, err := ethClient.SendTransaction(conf.FundingPrivateKey, to, nonce, big.NewInt(0), big.NewFloat(100))
 	require.NoError(t, err, "Error sending transaction")
 
 	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*15)
@@ -61,4 +67,16 @@ func TestSendTx(t *testing.T) {
 	require.NoError(t, err, "Error confirming tx")
 	cancel()
 	require.True(t, confirmed, "Transaction not confirmed")
+
+	finalFromBalance, err := ethClient.BalanceAt(fundingAddr)
+	require.NoError(t, err, "Error retrieving balance")
+	finalToBalance, err := ethClient.BalanceAt(to)
+	require.NoError(t, err, "Error retrieving balance")
+
+	require.Equal(t, 1, startingFromBalance.Cmp(finalFromBalance),
+		"Starting From balance '%s' should be less than the final balance '%s'",
+		client.WeiToEther(startingFromBalance).String(), client.WeiToEther(finalFromBalance).String())
+	require.Equal(t, -1, startingToBalance.Cmp(finalToBalance),
+		"Starting To balance '%s' should be less than the final balance '%s'",
+		client.WeiToEther(startingToBalance).String(), client.WeiToEther(finalToBalance).String())
 }

@@ -1,5 +1,7 @@
 FROM ethereum/client-go:stable-amd64
 
+RUN apk --no-cache add curl
+
 COPY ./geth_settings/test_pass.txt /root/config/password.txt
 COPY ./geth_settings/genesis.json /root/ethconfig/genesis.json
 COPY ./geth_settings/keys /root/.ethereum/devchain/keystore
@@ -9,7 +11,8 @@ EXPOSE 8545
 
 RUN geth init /root/ethconfig/genesis.json
 
-HEALTHCHECK --interval=3s --timeout=30s --retries=3 CMD curl http://localhost:8545 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":1337}'
+HEALTHCHECK --interval=5s --timeout=10s --retries=5 \
+  CMD curl --fail http://localhost:8545 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":1337}' || exit 1
 
 ENTRYPOINT [ "geth", "--dev", "--dev.period", "14", "--miner.gaslimit", "30000000", "--password", \
   "/root/config/password.txt", "--datadir", "/root/.ethereum/devchain", "--mine",  "--ipcdisable", \

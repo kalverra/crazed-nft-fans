@@ -33,8 +33,6 @@ func init() {
 }
 
 func TestConnectClient(t *testing.T) {
-	t.Parallel()
-
 	_, err := client.NewClient("ws://fakeurl.io")
 	require.Error(t, err, "Expected a fake URL to make the eth client throw an error")
 
@@ -46,9 +44,6 @@ func TestConnectClient(t *testing.T) {
 }
 
 func TestSendTx(t *testing.T) {
-	conf, err := config.ReadConfig()
-	require.NoError(t, err, "Error reading config")
-
 	ethClient, err := client.NewClient(conf.WS)
 	require.NoError(t, err, "Error connecting client")
 	require.NotNil(t, ethClient, "Nil client")
@@ -61,7 +56,7 @@ func TestSendTx(t *testing.T) {
 	hash, err := ethClient.SendTransaction(conf.FundingPrivateKey, common.HexToAddress(toAddress), 1, big.NewInt(0), big.NewFloat(1))
 	require.NoError(t, err, "Error sending transaction")
 
-	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	confirmed, err := ethClient.ConfirmTransaction(ctxt, hash)
 	require.NoError(t, err, "Error confirming tx")
 	cancel()

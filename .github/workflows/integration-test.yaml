@@ -7,7 +7,16 @@ on:
     branches:
       - main
 jobs:
-  unit:
+  integration:
+    permissions:
+      checks: write
+      pull-requests: write
+    services:
+      test-geth:
+        image: kalverra/test-geth
+        ports:
+          - 8545:8545
+          - 8546:8546
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the Repo
@@ -26,10 +35,9 @@ jobs:
       - name: Run Tests
         run: |
           set -euo pipefail
-          go test -json -v -coverprofile=profile.cov $(go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
+          go test -tags integration -count=1 -json -v -coverprofile=profile.cov $(go list ./...) 2>&1 | tee /tmp/gotest.log | gotestfmt
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:
           files: ./profile.cov
-          name: codecov-umbrella 
-
+          name: codecov-umbrella

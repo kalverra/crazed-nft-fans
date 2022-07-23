@@ -91,16 +91,16 @@ func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash)
 	for {
 		select {
 		case err := <-sub.Err():
-			return isPending, err
+			return false, err
 		case <-ctxt.Done():
-			return isPending, nil
+			return false, nil
 		case <-newBlocks:
 			_, isPending, err = c.innerClient.TransactionByHash(context.Background(), txHash)
 			if err != nil {
-				return isPending, err
+				return false, err
 			}
 			if !isPending {
-				return isPending, err
+				return true, err
 			}
 		}
 	}
@@ -108,5 +108,11 @@ func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash)
 
 // BalanceAt retrieves the current balance of the supplied address
 func (c *EthClient) BalanceAt(address common.Address) (*big.Int, error) {
-	return c.innerClient.BalanceAt(context.Background(), address, nil)
+	bal, err := c.innerClient.BalanceAt(context.Background(), address, nil)
+	if err != nil {
+		return nil, err
+	}
+	balFloat, _ := WeiToEther(bal).Float64()
+	log.Debug().Str("Address", address.Hex()).Float64("ETH", balFloat).Msg("Balance")
+	return bal, err
 }

@@ -10,8 +10,6 @@ import (
 )
 
 func TestPrivToAddr(t *testing.T) {
-	t.Parallel()
-
 	privateKey, err := crypto.GenerateKey()
 	require.NoError(t, err, "Error generating new private key")
 	addr, err := client.PrivateKeyToAddress(privateKey)
@@ -21,8 +19,6 @@ func TestPrivToAddr(t *testing.T) {
 }
 
 func TestConversions(t *testing.T) {
-	t.Parallel()
-
 	wei := big.NewInt(1500000000000000000)
 	gwei := big.NewFloat(1500000000)
 	eth := big.NewFloat(1.5)

@@ -18,6 +18,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestRead(t *testing.T) {
+	defer tearDown(t)
 	http := "http://url.com"
 	ws := "ws://url.com/ws"
 	chainId := uint64(420)
@@ -37,6 +38,7 @@ func TestRead(t *testing.T) {
 }
 
 func TestBadRead(t *testing.T) {
+	defer tearDown(t)
 	err := os.Setenv("CHAIN_ID", "badValue")
 	require.NoError(t, err, "Error setting env var")
 	err = config.ReadConfig()
@@ -46,6 +48,7 @@ func TestBadRead(t *testing.T) {
 }
 
 func TestCrazedLevel(t *testing.T) {
+	defer tearDown(t)
 	err := os.Setenv("CRAZED_LEVEL", "0")
 	require.NoError(t, err, "Error setting env var")
 	err = config.ReadConfig()
@@ -58,4 +61,24 @@ func TestCrazedLevel(t *testing.T) {
 	err = config.ReadConfig()
 	require.NoError(t, err, "Error reading config")
 	require.Equal(t, 0, config.Current.CrazedLevel, "Invalid crazed level should have been changed to 0")
+	err = os.Unsetenv("CRAZED_LEVEL")
+	require.NoError(t, err, "Error unsetting crazed level")
+}
+
+func TestBadKey(t *testing.T) {
+	defer tearDown(t)
+	err := os.Setenv("FUNDING_KEY", "badKey")
+	require.NoError(t, err, "Error setting env var")
+	err = config.ReadConfig()
+	require.Error(t, err, "Bad funding key should have ")
+
+}
+
+func tearDown(t *testing.T) {
+	t.Helper()
+	require.NoError(t, os.Unsetenv("HTTP_URL"))
+	require.NoError(t, os.Unsetenv("WS_URL"))
+	require.NoError(t, os.Unsetenv("CHAIN_ID"))
+	require.NoError(t, os.Unsetenv("FUNDING_KEY"))
+	require.NoError(t, os.Unsetenv("CRAZED_LEVEL"))
 }

@@ -31,12 +31,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Tests
         run: |
-          go test -tags integration -count=1 -json -v -coverprofile=profile.cov $(go list ./... | grep -v /contracts) > results.json
-          cat results.json | gotestfmt
+          set -euo pipefail
+          go test -tags integration -count=1 -json -v -coverprofile=profile.cov $(go list ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
+          cat /tmp/gotest.log
       - name: Format Results
+        if: always()
         run: |
           go install github.com/jstemmer/go-junit-report/v2@latest
-          cat results.json | go-junit-report -parser gojson > report.xml
+          cat /tmp/gotest.log | go-junit-report -parser gojson > report.xml
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v1
         if: always()

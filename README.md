@@ -1,4 +1,4 @@
-<center>
+<div align="center">
 
 # Crazed NFT Fans
 
@@ -7,7 +7,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/kalverra/crazed-nft-fans)](https://goreportcard.com/report/github.com/kalverra/crazed-nft-fans)
 [![codecov](https://codecov.io/gh/kalverra/crazed-nft-fans/branch/main/graph/badge.svg)](https://codecov.io/gh/kalverra/crazed-nft-fans)
 [![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/kalverra/crazed-nft-fans/main/LICENSE)
-</center>
+
+<div align="center">
+
 A new NFT has dropped, but its location is a secret! Fans have become crazed, and are sending funds to random wallets and calling gas guzzling contracts as fast as they can to hopefully snag it.
 
 Using the fans on a simulated network (like [geth in dev mode](https://geth.ethereum.org/docs/getting-started/dev-mode)) can help you emulate network congestion events.

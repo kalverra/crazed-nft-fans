@@ -8,6 +8,9 @@ on:
       - main
 jobs:
   integration:
+    permissions:
+      checks: write
+      pull-requests: write
     services:
       test-geth:
         image: kalverra/test-geth
@@ -33,19 +36,6 @@ jobs:
         run: |
           set -euo pipefail
           go test -tags integration -count=1 -json -v -coverprofile=profile.cov $(go list ./...) 2>&1 | tee /tmp/gotest.log | gotestfmt
-          cat /tmp/gotest.log
-      - name: Format Results
-        if: always()
-        run: |
-          go install github.com/jstemmer/go-junit-report/v2@latest
-          cat /tmp/gotest.log
-          go-junit-report -parser gojson -in /tmp/gotest.log -out report.xml
-          cat report.xml
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v1
-        if: always()
-        with:
-          files: "report.xml"
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:

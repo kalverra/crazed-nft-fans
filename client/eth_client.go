@@ -9,8 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/kalverra/crazed-nft-fans/config"
 	"github.com/rs/zerolog/log"
+
+	"github.com/kalverra/crazed-nft-fans/config"
 )
 
 // EthClient wraps the standard Ethereum client
@@ -98,7 +99,7 @@ func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash)
 
 	for {
 		select {
-		case err := <-sub.Err():
+		case err = <-sub.Err():
 			return false, err
 		case <-ctxt.Done():
 			return false, nil

@@ -5,8 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kalverra/crazed-nft-fans/config"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/crazed-nft-fans/config"
 )
 
 func TestRead(t *testing.T) {

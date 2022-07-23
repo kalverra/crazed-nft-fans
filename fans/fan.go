@@ -11,7 +11,7 @@ import (
 	"github.com/kalverra/crazed-nft-fans/client"
 )
 
-// Fan is an NFT fan that is looking for the NFT
+// Fan is an NFT fan that searches for the NFT by incessantly bumping gas
 type Fan struct {
 	ID          string
 	Name        string

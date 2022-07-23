@@ -28,6 +28,10 @@ var firstNames = []string{
 	"Connor",
 	"Adam",
 	"Meg",
+	"Dave",
+	"Pere",
+	"John",
+	"Kerry",
 }
 
 var lastNames = []string{

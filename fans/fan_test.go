@@ -3,8 +3,9 @@ package fans_test
 import (
 	"testing"
 
-	"github.com/kalverra/crazed-nft-fans/fans"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/crazed-nft-fans/fans"
 )
 
 func TestNewFan(t *testing.T) {

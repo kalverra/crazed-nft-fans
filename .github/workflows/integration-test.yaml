@@ -31,8 +31,17 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Tests
         run: |
-          set -euo pipefail
-          go test -tags integration -count=1 -json -v -coverprofile=profile.cov $(go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
+          go test -tags integration -count=1 -json -v -coverprofile=profile.cov $(go list ./... | grep -v /contracts) > results.json
+          cat results.json | gotestfmt
+      - name: Format Results
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          cat results.json | go-junit-report -parser gojson > report.xml
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v1
+        if: always()
+        with:
+          files: "report.xml"
       - name: Code Coverage
         uses: codecov/codecov-action@v3
         with:

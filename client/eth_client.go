@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -17,28 +18,28 @@ import (
 // EthClient wraps the standard Ethereum client
 type EthClient struct {
 	innerClient *ethclient.Client
-	FundedKey   ecdsa.PrivateKey
+	FundedKey   *ecdsa.PrivateKey
 }
 
-// NewClient produces a new client to connect to the blockchain
-func NewClient(wsURL string) (*EthClient, error) {
-	log.Debug().Str("URL", wsURL).Msg("Connecting Client")
-	ethClient, err := ethclient.Dial(wsURL)
+// NewClient produces a new client connected to the chain provided in the config
+func NewClient() (*EthClient, error) {
+	log.Debug().Str("URL", config.Current.WS).Msg("Connecting Client")
+	ethClient, err := ethclient.Dial(config.Current.WS)
 	return &EthClient{
 		innerClient: ethClient,
+		FundedKey:   config.Current.FundingPrivateKey,
 	}, err
 }
 
-// SuggestNonce suggests a nonce to use for sending a transaction
-func (c *EthClient) SuggestNonce(account common.Address) (uint64, error) {
-	return c.innerClient.PendingNonceAt(context.Background(), account)
+// SubscribeNewBlocks wraps SubscribeNewHead
+func (c *EthClient) SubscribeNewBlocks(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return c.innerClient.SubscribeNewHead(ctx, ch)
 }
 
 // SendTransaction sends an eth transaction
 func (c *EthClient) SendTransaction(
 	privateKey *ecdsa.PrivateKey,
 	toAddress common.Address,
-	nonce uint64,
 	additionalTip *big.Int,
 	amount *big.Float,
 ) (txHash common.Hash, err error) {
@@ -47,6 +48,10 @@ func (c *EthClient) SendTransaction(
 		return common.Hash{}, err
 	}
 	suggestedGasTipCap, err := c.innerClient.SuggestGasTipCap(context.Background())
+	if err != nil {
+		return common.Hash{}, err
+	}
+	suggestedNonce, err := c.innerClient.PendingNonceAt(context.Background(), fromAddr)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -63,7 +68,7 @@ func (c *EthClient) SendTransaction(
 
 	tx, err := types.SignNewTx(privateKey, types.LatestSignerForChainID(config.Current.BigChainID), &types.DynamicFeeTx{
 		ChainID:   config.Current.BigChainID,
-		Nonce:     nonce,
+		Nonce:     suggestedNonce,
 		To:        &toAddress,
 		Value:     EtherToWei(amount),
 		GasTipCap: suggestedGasTipCap,
@@ -80,7 +85,7 @@ func (c *EthClient) SendTransaction(
 		Str("Amount", amount.String()).
 		Uint64("Gas Tip Cap", suggestedGasTipCap.Uint64()).
 		Uint64("Gas Fee Cap", gasFeeCap.Uint64()).
-		Uint64("Nonce", nonce).
+		Uint64("Nonce", suggestedNonce).
 		Msg("Sending Transaction")
 	return tx.Hash(), c.innerClient.SendTransaction(context.Background(), tx)
 }

@@ -16,6 +16,14 @@ Using the fans on a simulated network (like [geth in dev mode](https://geth.ethe
 
 If using a simulated geth instance, you might find it helpful to [turn on metrics](https://geth.ethereum.org/docs/interface/metrics).
 
+## Configure
+
+Environment variables are used to configure everything about the crazed fans.
+
+```sh
+
+```
+
 ## Test
 
 `make test`

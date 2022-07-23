@@ -1,5 +1,17 @@
 linters:
   enable:
+    # defaults
+    - deadcode
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unused
+    - varcheck
+    # extra
     - exhaustive
     - exportloopref
     - revive
@@ -8,7 +20,7 @@ linters:
     - misspell
     - rowserrcheck
     - errorlint
-    - deadcode
+    - contextcheck
 linters-settings:
   exhaustive:
     default-signifies-exhaustive: true
@@ -43,6 +55,7 @@ linters-settings:
       - name: time-naming
       - name: indent-error-flow
       - name: errorf
+      - name: exported
       - name: empty-block
       - name: superfluous-else
       - name: unreachable-code

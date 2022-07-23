@@ -18,37 +18,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	toAddress string = "0x024c0763F8b55972Cd4a0349c79833bA9e3B2279"
-	conf      *config.Config
-)
+var toAddress string = "0x024c0763F8b55972Cd4a0349c79833bA9e3B2279"
 
-func init() {
-	var err error
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(zerolog.DebugLevel)
-	conf, err = config.ReadConfig()
-	if err != nil {
-		log.Fatal().Msg("Error reading config")
-	}
+func TestMain(m *testing.M) {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	os.Exit(m.Run())
+}
+
+func TestBadClient(t *testing.T) {
+	err := os.Setenv("WS_URL", "ws://fake.url")
+	require.NoError(t, err, "Error setting fake url for test")
+
+	err = config.ReadConfig()
+	require.NoError(t, err, "Error reading config")
+	_, err = client.NewClient()
+	require.Error(t, err, "Expected a fake URL to make the eth client throw an error")
+
+	err = os.Unsetenv("WS_URL")
+	require.NoError(t, err, "Error un-setting fake url")
 }
 
 func TestConnectClient(t *testing.T) {
-	_, err := client.NewClient("ws://fakeurl.io")
-	require.Error(t, err, "Expected a fake URL to make the eth client throw an error")
-
-	conf, err := config.ReadConfig()
+	err := config.ReadConfig()
 	require.NoError(t, err, "Error reading config")
-	client, err := client.NewClient(conf.WS)
+	client, err := client.NewClient()
 	require.NoError(t, err, "Error connecting client")
 	require.NotNil(t, client, "Nil client")
 }
 
 func TestSendTx(t *testing.T) {
 	to := common.HexToAddress(toAddress)
-	ethClient, err := client.NewClient(conf.WS)
+	ethClient, err := client.NewClient()
 	require.NoError(t, err, "Error connecting client")
 	require.NotNil(t, ethClient, "Nil client")
-	fundingAddr, err := client.PrivateKeyToAddress(conf.FundingPrivateKey)
+	fundingAddr, err := client.PrivateKeyToAddress(config.Current.FundingPrivateKey)
 	require.NoError(t, err, "Error getting funding key address")
 
 	startingFromBalance, err := ethClient.BalanceAt(fundingAddr)
@@ -57,9 +60,7 @@ func TestSendTx(t *testing.T) {
 	startingToBalance, err := ethClient.BalanceAt(to)
 	require.NoError(t, err, "Error retrieving balance")
 
-	nonce, err := ethClient.SuggestNonce(to)
-	require.NoError(t, err, "Error suggesting nonce")
-	hash, err := ethClient.SendTransaction(conf.FundingPrivateKey, to, nonce, big.NewInt(0), big.NewFloat(100))
+	hash, err := ethClient.SendTransaction(config.Current.FundingPrivateKey, to, big.NewInt(0), big.NewFloat(100))
 	require.NoError(t, err, "Error sending transaction")
 
 	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*15)

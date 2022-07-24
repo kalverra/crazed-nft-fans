@@ -112,7 +112,7 @@ func (f *Fan) Fund(ctx context.Context, nonce uint64, amount *big.Float) error {
 		return err
 	}
 	if !confirmed {
-		return fmt.Errorf("Unable to confirm funding tx for fan %s", f.Name)
+		return fmt.Errorf("unable to confirm funding tx for fan %s", f.Name)
 	}
 	return nil
 }

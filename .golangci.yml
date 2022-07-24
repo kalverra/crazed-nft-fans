@@ -1,0 +1,81 @@
+linters:
+  enable:
+    # defaults
+    - deadcode
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unused
+    - varcheck
+    # extra
+    - exhaustive
+    - exportloopref
+    - revive
+    - goimports
+    - gosec
+    - misspell
+    - rowserrcheck
+    - errorlint
+    - contextcheck
+linters-settings:
+  exhaustive:
+    default-signifies-exhaustive: true
+  goimports:
+    local-prefixes: github.com/kalverra/crazed-nft-fans
+  gosec:
+    exclude-generated: true
+    excludes:
+      - G404
+  govet:
+    # report about shadowed variables
+    check-shadowing: true
+  errorlint:
+    # Allow formatting of errors without %w
+    errorf: false
+  revive:
+    confidence: 0.8
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: if-return
+      - name: increment-decrement
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: indent-error-flow
+      - name: errorf
+      - name: exported
+      - name: empty-block
+      - name: superfluous-else
+      - name: unreachable-code
+      - name: redefines-builtin-id
+      - name: waitgroup-by-value
+      - name: unconditional-recursion
+      - name: struct-tag
+      - name: string-of-int
+      - name: range-val-in-closure
+      - name: modifies-value-receiver
+      - name: modifies-parameter
+      - name: identical-branches
+      - name: get-return
+      - name: defer
+      - name: constant-logical-expr
+      - name: bool-literal-in-expr
+      - name: atomic
+issues:
+  exclude-rules:
+    - path: test
+      text: "^G404:"
+      linters:
+        - gosec

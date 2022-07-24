@@ -6,31 +6,34 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/kalverra/crazed-nft-fans/config"
 	"github.com/rs/zerolog/log"
+
+	"github.com/kalverra/crazed-nft-fans/config"
 )
 
 // EthClient wraps the standard Ethereum client
 type EthClient struct {
 	innerClient *ethclient.Client
-	FundedKey   ecdsa.PrivateKey
+	FundedKey   *ecdsa.PrivateKey
 }
 
-// NewClient produces a new client to connect to the blockchain
+// NewClient produces a new client connected to the chain provided in the config
 func NewClient(wsURL string) (*EthClient, error) {
 	log.Debug().Str("URL", wsURL).Msg("Connecting Client")
 	ethClient, err := ethclient.Dial(wsURL)
 	return &EthClient{
 		innerClient: ethClient,
+		FundedKey:   config.Current.FundingPrivateKey,
 	}, err
 }
 
-// SuggestNonce suggests a nonce to use for sending a transaction
-func (c *EthClient) SuggestNonce(account common.Address) (uint64, error) {
-	return c.innerClient.PendingNonceAt(context.Background(), account)
+// SubscribeNewBlocks wraps SubscribeNewHead
+func (c *EthClient) SubscribeNewBlocks(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+	return c.innerClient.SubscribeNewHead(ctx, ch)
 }
 
 // SendTransaction sends an eth transaction
@@ -72,6 +75,7 @@ func (c *EthClient) SendTransaction(
 	if err != nil {
 		return common.Hash{}, err
 	}
+	GlobalTransactionTracker.NewTransaction(fromAddr, tx)
 
 	log.Info().
 		Str("From", fromAddr.Hex()).
@@ -85,7 +89,11 @@ func (c *EthClient) SendTransaction(
 }
 
 // ConfirmTransaction attempts to confirm a pending transaction until the context runs out
-func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash) (confirmed bool, err error) {
+func (c *EthClient) ConfirmTransaction(
+	ctxt context.Context,
+	fromAddr common.Address,
+	txHash common.Hash,
+) (confirmed bool, err error) {
 	_, isPending, err := c.innerClient.TransactionByHash(context.Background(), txHash)
 	if !isPending {
 		return isPending, err
@@ -98,7 +106,7 @@ func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash)
 
 	for {
 		select {
-		case err := <-sub.Err():
+		case err = <-sub.Err():
 			return false, err
 		case <-ctxt.Done():
 			return false, nil
@@ -108,7 +116,7 @@ func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash)
 				return false, err
 			}
 			if !isPending {
-				return true, err
+				return true, GlobalTransactionTracker.CompletedTransaction(fromAddr, txHash)
 			}
 		}
 	}

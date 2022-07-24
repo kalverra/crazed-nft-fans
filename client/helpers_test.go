@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/kalverra/crazed-nft-fans/client"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/crazed-nft-fans/client"
 )
 
 func TestPrivToAddr(t *testing.T) {

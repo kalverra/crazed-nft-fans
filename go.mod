@@ -8,6 +8,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.8.0
+	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
 )
 
 require (

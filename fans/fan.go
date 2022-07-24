@@ -42,7 +42,7 @@ func NewFan() (*Fan, error) {
 	if err != nil {
 		return nil, err
 	}
-	fanClient, err := client.NewClient()
+	fanClient, err := client.NewClient(config.Current.WS)
 	if err != nil {
 		return nil, err
 	}
@@ -102,12 +102,12 @@ func (f *Fan) IsSearching() bool {
 }
 
 // Fund funds the fan with the provided amount of ETH. Errors if the tx doesn't complete
-func (f *Fan) Fund(ctx context.Context, amount *big.Float) error {
-	hash, err := f.Client.SendTransaction(f.Client.FundedKey, f.Address, big.NewInt(0), amount)
+func (f *Fan) Fund(ctx context.Context, nonce uint64, amount *big.Float) error {
+	hash, err := f.Client.SendTransaction(f.Client.FundedKey, f.Address, nonce, big.NewInt(0), amount)
 	if err != nil {
 		return err
 	}
-	confirmed, err := f.Client.ConfirmTransaction(ctx, hash)
+	confirmed, err := f.Client.ConfirmTransaction(ctx, f.Address, hash)
 	if err != nil {
 		return err
 	}

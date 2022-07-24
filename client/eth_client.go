@@ -22,9 +22,9 @@ type EthClient struct {
 }
 
 // NewClient produces a new client connected to the chain provided in the config
-func NewClient() (*EthClient, error) {
-	log.Debug().Str("URL", config.Current.WS).Msg("Connecting Client")
-	ethClient, err := ethclient.Dial(config.Current.WS)
+func NewClient(wsURL string) (*EthClient, error) {
+	log.Debug().Str("URL", wsURL).Msg("Connecting Client")
+	ethClient, err := ethclient.Dial(wsURL)
 	return &EthClient{
 		innerClient: ethClient,
 		FundedKey:   config.Current.FundingPrivateKey,
@@ -40,6 +40,7 @@ func (c *EthClient) SubscribeNewBlocks(ctx context.Context, ch chan<- *types.Hea
 func (c *EthClient) SendTransaction(
 	privateKey *ecdsa.PrivateKey,
 	toAddress common.Address,
+	nonce uint64,
 	additionalTip *big.Int,
 	amount *big.Float,
 ) (txHash common.Hash, err error) {
@@ -48,10 +49,6 @@ func (c *EthClient) SendTransaction(
 		return common.Hash{}, err
 	}
 	suggestedGasTipCap, err := c.innerClient.SuggestGasTipCap(context.Background())
-	if err != nil {
-		return common.Hash{}, err
-	}
-	suggestedNonce, err := c.innerClient.PendingNonceAt(context.Background(), fromAddr)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -68,7 +65,7 @@ func (c *EthClient) SendTransaction(
 
 	tx, err := types.SignNewTx(privateKey, types.LatestSignerForChainID(config.Current.BigChainID), &types.DynamicFeeTx{
 		ChainID:   config.Current.BigChainID,
-		Nonce:     suggestedNonce,
+		Nonce:     nonce,
 		To:        &toAddress,
 		Value:     EtherToWei(amount),
 		GasTipCap: suggestedGasTipCap,
@@ -78,6 +75,7 @@ func (c *EthClient) SendTransaction(
 	if err != nil {
 		return common.Hash{}, err
 	}
+	GlobalTransactionTracker.NewTransaction(fromAddr, tx)
 
 	log.Info().
 		Str("From", fromAddr.Hex()).
@@ -85,13 +83,17 @@ func (c *EthClient) SendTransaction(
 		Str("Amount", amount.String()).
 		Uint64("Gas Tip Cap", suggestedGasTipCap.Uint64()).
 		Uint64("Gas Fee Cap", gasFeeCap.Uint64()).
-		Uint64("Nonce", suggestedNonce).
+		Uint64("Nonce", nonce).
 		Msg("Sending Transaction")
 	return tx.Hash(), c.innerClient.SendTransaction(context.Background(), tx)
 }
 
 // ConfirmTransaction attempts to confirm a pending transaction until the context runs out
-func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash) (confirmed bool, err error) {
+func (c *EthClient) ConfirmTransaction(
+	ctxt context.Context,
+	fromAddr common.Address,
+	txHash common.Hash,
+) (confirmed bool, err error) {
 	_, isPending, err := c.innerClient.TransactionByHash(context.Background(), txHash)
 	if !isPending {
 		return isPending, err
@@ -114,7 +116,7 @@ func (c *EthClient) ConfirmTransaction(ctxt context.Context, txHash common.Hash)
 				return false, err
 			}
 			if !isPending {
-				return true, err
+				return true, GlobalTransactionTracker.CompletedTransaction(fromAddr, txHash)
 			}
 		}
 	}

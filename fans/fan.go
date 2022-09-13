@@ -89,6 +89,10 @@ func (f *Fan) Search() error {
 	}
 }
 
+func (f *Fan) search() {
+
+}
+
 // StopSearch halts the fan if it is currently searching for the NFT
 func (f *Fan) StopSearch() {
 	f.stopSearch <- struct{}{}
@@ -102,12 +106,17 @@ func (f *Fan) IsSearching() bool {
 }
 
 // Fund funds the fan with the provided amount of ETH. Errors if the tx doesn't complete
-func (f *Fan) Fund(ctx context.Context, nonce uint64, amount *big.Float) error {
-	hash, err := f.Client.SendTransaction(f.Client.FundedKey, f.Address, nonce, big.NewInt(0), amount)
+func (f *Fan) Fund(ctx context.Context, amount *big.Float) error {
+	fundingNonce := client.GlobalTransactionTracker.FundingNonce()
+	fundingAddr, err := client.PrivateKeyToAddress(f.Client.FundedKey)
 	if err != nil {
 		return err
 	}
-	confirmed, err := f.Client.ConfirmTransaction(ctx, f.Address, hash)
+	hash, err := f.Client.SendTransaction(f.Client.FundedKey, f.Address, fundingNonce, big.NewInt(0), amount)
+	if err != nil {
+		return err
+	}
+	confirmed, err := f.Client.ConfirmTransaction(ctx, fundingAddr, hash)
 	if err != nil {
 		return err
 	}

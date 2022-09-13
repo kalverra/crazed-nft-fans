@@ -64,7 +64,7 @@ func TestSendTx(t *testing.T) {
 	startingToBalance, err := ethClient.BalanceAt(toAddress)
 	require.NoError(t, err, "Error retrieving balance")
 
-	fundingNonce := client.GlobalTransactionTracker.FirstAvailableNonce(fundingAddr)
+	fundingNonce := client.GlobalTransactionTracker.FundingNonce()
 	hash, err := ethClient.SendTransaction(config.Current.FundingPrivateKey, toAddress, fundingNonce, big.NewInt(0), big.NewFloat(100))
 	require.NoError(t, err, "Error sending transaction")
 
@@ -124,7 +124,7 @@ func TestConfirm(t *testing.T) {
 
 	fundingAddr, err := client.PrivateKeyToAddress(config.Current.FundingPrivateKey)
 	require.NoError(t, err, "Error getting funding key address")
-	fundingNonce := client.GlobalTransactionTracker.FirstAvailableNonce(fundingAddr)
+	fundingNonce := client.GlobalTransactionTracker.FundingNonce()
 	hash, err := ethClient.SendTransaction(config.Current.FundingPrivateKey, toAddress, fundingNonce, big.NewInt(0), big.NewFloat(100))
 	require.NoError(t, err, "Error sending transaction")
 

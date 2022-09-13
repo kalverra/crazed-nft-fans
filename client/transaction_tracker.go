@@ -135,6 +135,16 @@ func (t *transactionTracker) FirstAvailableNonce(from common.Address) uint64 {
 	return t.transactions[from].lastUsedNonce
 }
 
+// FirstAvailableNonce retrieves the first nonce, to our knowledge, that has not been used yet in either completed OR
+// pending txs.
+func (t *transactionTracker) FundingNonce() uint64 {
+	fundingAddr, err := PrivateKeyToAddress(config.Current.FundingPrivateKey)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error converting key to address")
+	}
+	return t.FirstAvailableNonce(fundingAddr)
+}
+
 // getTransactionByNonce retrieves a transaction with the supplied nonce, nil if there is none
 func (t *transactionTracker) getTransactionByNonce(from common.Address, nonce uint64) *trackedTransaction {
 	for _, tx := range t.transactions[from].trackedTransactions {

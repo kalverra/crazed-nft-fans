@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/kalverra/crazed-nft-fans/branch/main/graph/badge.svg)](https://codecov.io/gh/kalverra/crazed-nft-fans)
 [![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/kalverra/crazed-nft-fans/main/LICENSE)
 
-<div align="center">
+</div>
 
 A new NFT has dropped, but its location is a secret! Fans have become crazed, and are sending funds to random wallets and calling gas guzzling contracts as fast as they can to hopefully snag it.
 
@@ -21,7 +21,26 @@ If using a simulated geth instance, you might find it helpful to [turn on metric
 Environment variables are used to configure everything about the crazed fans.
 
 ```sh
+HTTP_URL="http://localhost:8545" # HTTP URL of the chain to run on
+WS_URL="ws://localhost:8546" # WS URL of the chain to run on
+CHAIN_ID="1337" # ID of the chain to run on
+FUNDING_KEY="ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" # Private key of the funding address
+CRAZED_LEVEL="0" # See below
+```
 
+### Crazed Levels
+
+You can set how intensely the fans will interact with the chain using the `CRAZED_LEVEL` env var. This controls how high fans will set their gas tips, and how often they decide to replace transactions with higher gas tips.
+
+```go
+var CrazedLevelMappings = map[int]string{
+  0: "Mixed", // Randomly assigns each fan one of the below statuses
+  1: "Indifferent",
+  2: "Curious",
+  3: "Interested",
+  4: "Obsessed",
+  5: "Manic",
+}
 ```
 
 ## Test

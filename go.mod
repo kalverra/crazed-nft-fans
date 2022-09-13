@@ -8,7 +8,6 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.8.0
-	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
 )
 
 require (
@@ -31,5 +30,3 @@ require (
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// replace github.com/wailsapp/wails/v2 v2.0.0-beta.38 => /Users/adamhamrick/go/pkg/mod/github.com/wailsapp/wails/v2@v2.0.0-beta.38

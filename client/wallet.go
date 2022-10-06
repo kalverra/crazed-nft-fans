@@ -108,6 +108,7 @@ func (w *Wallet) SendTransaction(
 			if err != nil {
 				log.Fatal().Err(err).
 					Str("To", toAddress.Hex()).
+					Str("From", w.address.Hex()).
 					Str("Amount", amount.String()).
 					Str("Hash", tx.Hash().Hex()).
 					Uint64("Gas Tip Cap", tx.GasTipCap().Uint64()).
@@ -120,6 +121,7 @@ func (w *Wallet) SendTransaction(
 		case err := <-errChan:
 			log.Fatal().Err(err).
 				Str("To", toAddress.Hex()).
+				Str("From", w.address.Hex()).
 				Str("Amount", amount.String()).
 				Str("Hash", tx.Hash().Hex()).
 				Uint64("Gas Tip Cap", tx.GasTipCap().Uint64()).
@@ -130,6 +132,7 @@ func (w *Wallet) SendTransaction(
 		case <-confirmedChan:
 			log.Info().
 				Str("To", toAddress.Hex()).
+				Str("From", w.address.Hex()).
 				Str("Amount", amount.String()).
 				Str("Hash", tx.Hash().Hex()).
 				Uint64("Nonce", nonce).

@@ -12,6 +12,7 @@ func newName() string {
 }
 
 var firstNames = []string{
+	"Satoshi",
 	"Paul",
 	"Rick",
 	"Morty",
@@ -38,10 +39,8 @@ var lastNames = []string{
 	"Atreides",
 	"Smith",
 	"Nazarov",
-	"Ellis",
-	"Juels",
+	"Nakamoto",
 	"Lamar",
 	"Gambino",
-	"Hite",
 	"Hamrick",
 }

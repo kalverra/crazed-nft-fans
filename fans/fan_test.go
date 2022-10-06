@@ -4,7 +4,6 @@
 package fans_test
 
 import (
-	"context"
 	"math/big"
 	"os"
 	"testing"
@@ -14,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kalverra/crazed-nft-fans/client"
 	"github.com/kalverra/crazed-nft-fans/config"
 	"github.com/kalverra/crazed-nft-fans/fans"
 )
@@ -25,11 +23,17 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error reading initial config file")
 	}
-	err = client.NewTransactionTracker()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error initializing transaction tracker")
-	}
 	os.Exit(m.Run())
+}
+
+func TestFunding(t *testing.T) {
+	t.Parallel()
+
+	president, err := fans.NewPresident()
+	require.NoError(t, err, "Error creating new Fan President")
+	err = president.NewFans(5)
+	require.NoError(t, err, "Error creating new fans")
+	president.FundFans(big.NewFloat(1))
 }
 
 func TestNewFan(t *testing.T) {
@@ -57,16 +61,4 @@ func TestStopSearch(t *testing.T) {
 	fan.StopSearch()
 	time.Sleep(time.Millisecond)
 	require.False(t, fan.IsSearching(), "Fan should no longer be searching")
-}
-
-func TestFundFan(t *testing.T) {
-	t.Parallel()
-
-	fan, err := fans.NewFan()
-	require.NoError(t, err, "Error creating new fan")
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	err = fan.Fund(ctx, big.NewFloat(1))
-	require.NoError(t, err, "Error funding fan")
-	cancel()
 }

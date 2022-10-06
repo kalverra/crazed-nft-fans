@@ -4,7 +4,6 @@ package client
 import (
 	"context"
 	"crypto/ecdsa"
-	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -29,7 +28,7 @@ type Wallet struct {
 	nonceMutex   sync.Mutex
 }
 
-// NewClient produces a new client connected to the chain provided in the config
+// NewWallet produces a new wallet to manage transactions on the specified chain
 func NewWallet(privateKey *ecdsa.PrivateKey, wsURL string) (*Wallet, error) {
 	address, err := PrivateKeyToAddress(privateKey)
 	if err != nil {
@@ -42,7 +41,7 @@ func NewWallet(privateKey *ecdsa.PrivateKey, wsURL string) (*Wallet, error) {
 	}
 
 	log.Debug().
-		Str("Private Key", fmt.Sprintf("%x", privateKeyString)).
+		Str("Private Key", privateKeyString).
 		Str("Address", address.Hex()).
 		Str("URL", wsURL).
 		Msg("Creating New Wallet")
@@ -130,7 +129,7 @@ func (w *Wallet) SendTransaction(
 				Int("Attempt", attempt).
 				Msg("Error Confirming Transaction")
 		case <-confirmedChan:
-			log.Info().
+			log.Debug().
 				Str("To", toAddress.Hex()).
 				Str("From", w.address.Hex()).
 				Str("Amount", amount.String()).
@@ -183,7 +182,7 @@ func (w *Wallet) sendTx(
 	if err != nil {
 		return nil, err
 	}
-	log.Info().
+	log.Debug().
 		Str("From", fromAddr.Hex()).
 		Str("To", toAddress.Hex()).
 		Str("Amount", amount.String()).

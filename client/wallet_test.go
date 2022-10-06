@@ -34,8 +34,26 @@ func TestMain(m *testing.M) {
 func TestBadClient(t *testing.T) {
 	t.Parallel()
 
-	_, err := client.NewWallet(config.Current.FundingPrivateKey, "ws://fake.url")
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err, "Error generating key")
+
+	_, err = client.NewWallet(key, "ws://fake.url")
 	require.Error(t, err, "Expected a fake URL to make the eth client throw an error")
+}
+
+func TestSameWallet(t *testing.T) {
+	t.Parallel()
+
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err, "Error generating key")
+
+	firstWallet, err := client.NewWallet(key, config.Current.WS)
+	require.NoError(t, err, "Error creating wallet")
+	require.NotNil(t, firstWallet, "Nil wallet")
+	secondWallet, err := client.NewWallet(key, config.Current.WS)
+	require.NoError(t, err, "Error creating wallet")
+	require.NotNil(t, secondWallet, "Nil wallet")
+	require.Equal(t, firstWallet, secondWallet, "Wallets should be the same")
 }
 
 func TestConnectClient(t *testing.T) {
@@ -44,18 +62,6 @@ func TestConnectClient(t *testing.T) {
 	wallet, err := client.NewWallet(config.Current.FundingPrivateKey, config.Current.WS)
 	require.NoError(t, err, "Error creating wallet")
 	require.NotNil(t, wallet, "Nil client")
-}
-
-func TestSameWallet(t *testing.T) {
-	t.Parallel()
-
-	firstWallet, err := client.NewWallet(config.Current.FundingPrivateKey, config.Current.WS)
-	require.NoError(t, err, "Error creating wallet")
-	require.NotNil(t, firstWallet, "Nil wallet")
-	secondWallet, err := client.NewWallet(config.Current.FundingPrivateKey, config.Current.WS)
-	require.NoError(t, err, "Error creating wallet")
-	require.NotNil(t, secondWallet, "Nil wallet")
-	require.Equal(t, firstWallet, secondWallet, "Wallets should be the same")
 }
 
 func TestDifferentWallet(t *testing.T) {

@@ -17,11 +17,17 @@ import (
 	"github.com/kalverra/crazed-nft-fans/fans"
 )
 
+var president *fans.FanPresident
+
 func TestMain(m *testing.M) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	err := config.ReadConfig()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error reading initial config file")
+	}
+	president, err = fans.NewPresident()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error creating new fan president")
 	}
 	os.Exit(m.Run())
 }
@@ -29,9 +35,7 @@ func TestMain(m *testing.M) {
 func TestFunding(t *testing.T) {
 	t.Parallel()
 
-	president, err := fans.NewPresident()
-	require.NoError(t, err, "Error creating new Fan President")
-	err = president.NewFans(5)
+	err := president.NewFans(5)
 	require.NoError(t, err, "Error creating new fans")
 	president.FundFans(big.NewFloat(1))
 }
@@ -51,14 +55,17 @@ func TestNewFan(t *testing.T) {
 func TestStopSearch(t *testing.T) {
 	t.Parallel()
 
-	fan, err := fans.NewFan()
-	require.NoError(t, err, "Error creating new fan")
+	err := president.NewFans(1)
+	require.NoError(t, err, "Error creating new fans")
+	president.FundFans(big.NewFloat(1))
 
-	go fan.Search()
+	searchingFan := president.Fans()[0]
+	err = searchingFan.Search()
+	require.NoError(t, err, "Error searching")
 
-	time.Sleep(time.Millisecond)
-	require.True(t, fan.IsSearching(), "Fan should have an active searching status")
-	fan.StopSearch()
-	time.Sleep(time.Millisecond)
-	require.False(t, fan.IsSearching(), "Fan should no longer be searching")
+	require.True(t, searchingFan.IsSearching(), "Fan should have an active searching status")
+	searchingFan.StopSearch()
+
+	time.Sleep(time.Millisecond) // Yuck, but necessary/intended functionality
+	require.False(t, searchingFan.IsSearching(), "Fan should no longer be searching")
 }

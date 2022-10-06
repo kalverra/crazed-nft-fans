@@ -66,12 +66,6 @@ func (f *Fan) Search() error {
 	f.searchingMutex.Lock()
 	f.currentlySearching = true
 	f.searchingMutex.Unlock()
-	defer func() {
-		log.Info().Str("Fan", f.Name).Msg("Stopping Search")
-		f.searchingMutex.Lock()
-		f.currentlySearching = false
-		f.searchingMutex.Unlock()
-	}()
 
 	newHeads := make(chan *types.Header)
 	sub, err := f.Wallet.SubscribeNewBlocks(context.Background(), newHeads)
@@ -79,21 +73,28 @@ func (f *Fan) Search() error {
 		return err
 	}
 
-	for {
-		select {
-		case err = <-sub.Err():
-			return err
-		case <-f.stopSearch:
-			return nil
-		default:
-			f.search()
+	go func() {
+		for {
+			select {
+			case err = <-sub.Err():
+				log.Fatal().Str("Fan", f.Name).Err(err).Msg("Error while searching")
+			case <-f.stopSearch:
+				log.Info().Str("Fan", f.Name).Msg("Stopping Search")
+				f.searchingMutex.Lock()
+				f.currentlySearching = false
+				f.searchingMutex.Unlock()
+				return
+			default:
+				f.search()
+			}
 		}
-	}
+	}()
+	return nil
 }
 
 func (f *Fan) search() {
 	to := common.HexToAddress("0x024c0763F8b55972Cd4a0349c79833bA9e3B2279")
-	f.Wallet.SendTransaction(time.Second*5, big.NewFloat(1.15), to, big.NewInt(1), big.NewFloat(.001))
+	go f.Wallet.SendTransaction(time.Second*5, big.NewFloat(1.15), to, big.NewInt(1), big.NewFloat(.001))
 }
 
 // StopSearch halts the fan if it is currently searching for the NFT

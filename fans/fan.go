@@ -4,9 +4,9 @@ package fans
 import (
 	"context"
 	"crypto/ecdsa"
-	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -22,7 +22,7 @@ import (
 type Fan struct {
 	ID          string
 	Name        string
-	Client      *client.EthClient
+	Wallet      *client.Wallet
 	PrivateKey  *ecdsa.PrivateKey
 	Address     common.Address
 	CrazedLevel int
@@ -42,7 +42,7 @@ func NewFan() (*Fan, error) {
 	if err != nil {
 		return nil, err
 	}
-	fanClient, err := client.NewClient(config.Current.WS)
+	fanWallet, err := client.NewWallet(privateKey, config.Current.WS)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func NewFan() (*Fan, error) {
 	return &Fan{
 		ID:          uuid.New().String(),
 		Name:        newName(),
-		Client:      fanClient,
+		Wallet:      fanWallet,
 		PrivateKey:  privateKey,
 		Address:     address,
 		CrazedLevel: config.Current.GetCrazedLevel(),
@@ -66,31 +66,35 @@ func (f *Fan) Search() error {
 	f.searchingMutex.Lock()
 	f.currentlySearching = true
 	f.searchingMutex.Unlock()
-	defer func() {
-		log.Info().Str("Fan", f.Name).Msg("Stopping Search")
-		f.searchingMutex.Lock()
-		f.currentlySearching = false
-		f.searchingMutex.Unlock()
-	}()
 
 	newHeads := make(chan *types.Header)
-	sub, err := f.Client.SubscribeNewBlocks(context.Background(), newHeads)
+	sub, err := f.Wallet.SubscribeNewBlocks(context.Background(), newHeads)
 	if err != nil {
 		return err
 	}
 
-	for {
-		select {
-		case err = <-sub.Err():
-			return err
-		case <-f.stopSearch:
-			return nil
+	go func() {
+		for {
+			select {
+			case err = <-sub.Err():
+				log.Fatal().Str("Fan", f.Name).Err(err).Msg("Error while searching")
+			case <-f.stopSearch:
+				log.Info().Str("Fan", f.Name).Msg("Stopping Search")
+				f.searchingMutex.Lock()
+				f.currentlySearching = false
+				f.searchingMutex.Unlock()
+				return
+			default:
+				f.search()
+			}
 		}
-	}
+	}()
+	return nil
 }
 
 func (f *Fan) search() {
-
+	to := common.HexToAddress("0x024c0763F8b55972Cd4a0349c79833bA9e3B2279")
+	go f.Wallet.SendTransaction(time.Second*5, big.NewFloat(1.15), to, big.NewInt(1), big.NewFloat(.001))
 }
 
 // StopSearch halts the fan if it is currently searching for the NFT
@@ -103,25 +107,4 @@ func (f *Fan) IsSearching() bool {
 	f.searchingMutex.Lock()
 	defer f.searchingMutex.Unlock()
 	return f.currentlySearching
-}
-
-// Fund funds the fan with the provided amount of ETH. Errors if the tx doesn't complete
-func (f *Fan) Fund(ctx context.Context, amount *big.Float) error {
-	fundingNonce := client.GlobalTransactionTracker.FundingNonce()
-	fundingAddr, err := client.PrivateKeyToAddress(f.Client.FundedKey)
-	if err != nil {
-		return err
-	}
-	hash, err := f.Client.SendTransaction(f.Client.FundedKey, f.Address, fundingNonce, big.NewInt(0), amount)
-	if err != nil {
-		return err
-	}
-	confirmed, err := f.Client.ConfirmTransaction(ctx, fundingAddr, hash)
-	if err != nil {
-		return err
-	}
-	if !confirmed {
-		return fmt.Errorf("unable to confirm funding tx for fan %s", f.Name)
-	}
-	return nil
 }

@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/kalverra/crazed-nft-fans/client"
 	"github.com/kalverra/crazed-nft-fans/config"
-	"github.com/rs/zerolog/log"
 )
 
 type FanPresident struct {

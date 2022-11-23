@@ -4,11 +4,13 @@ package client
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -19,7 +21,7 @@ import (
 
 // client wraps the standard Ethereum client
 type Wallet struct {
-	client *ethclient.Client
+	EthClient *ethclient.Client
 
 	privateKey *ecdsa.PrivateKey
 	address    common.Address
@@ -55,7 +57,7 @@ func NewWallet(privateKey *ecdsa.PrivateKey, wsURL string) (*Wallet, error) {
 		return nil, err
 	}
 	wallet := &Wallet{
-		client:       c,
+		EthClient:    c,
 		pendingNonce: nonce,
 		privateKey:   privateKey,
 		address:      address,
@@ -66,10 +68,12 @@ func NewWallet(privateKey *ecdsa.PrivateKey, wsURL string) (*Wallet, error) {
 
 // SubscribeNewBlocks wraps SubscribeNewHead
 func (w *Wallet) SubscribeNewBlocks(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
-	return w.client.SubscribeNewHead(ctx, ch)
+	return w.EthClient.SubscribeNewHead(ctx, ch)
 }
 
-// SendTransaction sends an eth transaction
+// SendTransaction sends an eth transaction, and confirms it gets on chain.
+// timeBeforeResending determines how long to wait for the transaction to be confirmed before attempting a re-send
+// reSendTipMultiplier multiplies the gas tip when replacing the old transaction
 func (w *Wallet) SendTransaction(
 	timeBeforeResending time.Duration,
 	reSendTipMultiplier *big.Float,
@@ -80,10 +84,7 @@ func (w *Wallet) SendTransaction(
 	if additionalTip.Cmp(big.NewInt(0)) <= 0 {
 		additionalTip.SetInt64(1)
 	}
-	w.nonceMutex.Lock()
-	nonce := w.pendingNonce
-	w.pendingNonce++
-	w.nonceMutex.Unlock()
+	nonce := w.newNonce()
 	attempt := 0
 	reSendTimer := time.NewTimer(0)
 	confirmedChan, errChan := make(chan struct{}), make(chan error)
@@ -116,7 +117,7 @@ func (w *Wallet) SendTransaction(
 					Int("Attempt", attempt).
 					Msg("Error Sending Transaction")
 			}
-			go w.confirmTx(confirmedChan, errChan, tx)
+			go w.ConfirmTx(confirmedChan, errChan, tx)
 		case err := <-errChan:
 			log.Fatal().Err(err).
 				Str("To", toAddress.Hex()).
@@ -155,7 +156,7 @@ func (w *Wallet) sendTx(
 	if err != nil {
 		return nil, err
 	}
-	suggestedGasTipCap, err := w.client.SuggestGasTipCap(context.Background())
+	suggestedGasTipCap, err := w.EthClient.SuggestGasTipCap(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +164,7 @@ func (w *Wallet) sendTx(
 	// Bump Tip Cap
 	suggestedGasTipCap.Add(suggestedGasTipCap, additionalTip)
 
-	latestBlock, err := w.client.BlockByNumber(context.Background(), nil)
+	latestBlock, err := w.EthClient.BlockByNumber(context.Background(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -192,16 +193,16 @@ func (w *Wallet) sendTx(
 		Uint64("Nonce", nonce).
 		Int("Attempt", attempt).
 		Msg("Sending Transaction")
-	return tx, w.client.SendTransaction(context.Background(), tx)
+	return tx, w.EthClient.SendTransaction(context.Background(), tx)
 }
 
-// ConfirmTransaction attempts to confirm a pending transaction until the context runs out
-func (w *Wallet) confirmTx(
+// ConfirmTx attempts to confirm a tx on chain, sending a struct on the confirmed chan when it does
+func (w *Wallet) ConfirmTx(
 	confirmedChan chan struct{},
 	errChan chan error,
 	transaction *types.Transaction,
 ) {
-	_, isPending, err := w.client.TransactionByHash(context.Background(), transaction.Hash())
+	_, isPending, err := w.EthClient.TransactionByHash(context.Background(), transaction.Hash())
 	if err != nil {
 		errChan <- err
 		return
@@ -211,7 +212,7 @@ func (w *Wallet) confirmTx(
 		return
 	}
 	newBlocks := make(chan *types.Header)
-	sub, err := w.client.SubscribeNewHead(context.Background(), newBlocks)
+	sub, err := w.EthClient.SubscribeNewHead(context.Background(), newBlocks)
 	if err != nil {
 		errChan <- err
 		return
@@ -223,7 +224,7 @@ func (w *Wallet) confirmTx(
 			errChan <- err
 			return
 		case <-newBlocks:
-			_, isPending, err = w.client.TransactionByHash(context.Background(), transaction.Hash())
+			_, isPending, err = w.EthClient.TransactionByHash(context.Background(), transaction.Hash())
 			if err != nil {
 				errChan <- err
 				return
@@ -235,9 +236,62 @@ func (w *Wallet) confirmTx(
 	}
 }
 
+// ConfirmTxWait confirms the transaction, waiting until the tx confirms until it returns
+func (w *Wallet) ConfirmTxWait(ctx context.Context, transaction *types.Transaction) error {
+	_, isPending, err := w.EthClient.TransactionByHash(ctx, transaction.Hash())
+	if err != nil {
+		return err
+	}
+	if !isPending {
+		return nil
+	}
+	newBlocks := make(chan *types.Header)
+	sub, err := w.EthClient.SubscribeNewHead(ctx, newBlocks)
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case err = <-sub.Err():
+			return err
+		case <-ctx.Done():
+			return fmt.Errorf("timed out while confirming transaction %s", transaction.Hash().Hex())
+		case <-newBlocks:
+			_, isPending, err = w.EthClient.TransactionByHash(ctx, transaction.Hash())
+			if err != nil {
+				return err
+			} else if !isPending { // Confirmed on chain
+				return nil
+			}
+		}
+	}
+}
+
+// TransactionOpts for deploying contracts. Warning: increases nonce
+func (w *Wallet) TransactionOpts() (*bind.TransactOpts, error) {
+	opts, err := bind.NewKeyedTransactorWithChainID(w.privateKey, config.Current.BigChainID)
+	if err != nil {
+		return nil, err
+	}
+	opts.From = w.address
+	opts.Context = context.Background()
+	opts.Nonce = new(big.Int).SetUint64(w.newNonce())
+	return opts, nil
+}
+
+// newNonce gives a new nonce to use for this wallet
+func (w *Wallet) newNonce() uint64 {
+	w.nonceMutex.Lock()
+	defer w.nonceMutex.Unlock()
+	nonce := w.pendingNonce
+	w.pendingNonce++
+	return nonce
+}
+
 // Balance retrieves the current balance of the wallet
 func (w *Wallet) Balance() (*big.Int, error) {
-	bal, err := w.client.BalanceAt(context.Background(), w.address, nil)
+	bal, err := w.EthClient.BalanceAt(context.Background(), w.address, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -248,11 +302,16 @@ func (w *Wallet) Balance() (*big.Int, error) {
 
 // BalanceAt wraps balance at
 func (w *Wallet) BalanceAt(address common.Address) (*big.Int, error) {
-	bal, err := w.client.BalanceAt(context.Background(), address, nil)
+	bal, err := w.EthClient.BalanceAt(context.Background(), address, nil)
 	if err != nil {
 		return nil, err
 	}
 	balFloat, _ := WeiToEther(bal).Float64()
 	log.Debug().Str("Address", address.Hex()).Float64("ETH", balFloat).Msg("Balance")
 	return bal, err
+}
+
+// BlockByNumber wraps ether block by number. Input nil for latest block
+func (w *Wallet) BlockByNumber(blockNumber *big.Int) (*types.Block, error) {
+	return w.EthClient.BlockByNumber(context.Background(), blockNumber)
 }

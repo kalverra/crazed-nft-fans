@@ -5,8 +5,9 @@ on:
   pull_request:
     branches: [main]
 
+# Only run 1 of this workflow at a time per PR
 concurrency:
-  group: ${{ github.head_ref }}
+  group: linting-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

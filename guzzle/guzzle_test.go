@@ -12,7 +12,7 @@ import (
 	"github.com/kalverra/crazed-nft-fans/fans"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/test-go/testify/require"
+	"github.com/stretchr/testify/require"
 )
 
 var president *fans.FanPresident

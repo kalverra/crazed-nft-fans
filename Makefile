@@ -28,10 +28,10 @@ test_race:
 	go test -race -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
 
 test_integration: clean_test_node start_test_node
-	go install github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest	
+	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest	
 	set -euo pipefail
 
-	go test -timeout 5m -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
+	go test -timeout 5m -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /guzzle) 2>&1 | tee /tmp/gotest.log | gotestfmt
 	-docker rm --force test-geth
 
 start_test_node:
@@ -56,6 +56,15 @@ start_blockscout:
 	export ETHEREUM_JSONRPC_HTTP_URL=http://host.docker.internal:8545 && \
 	export ETHEREUM_JSONRPC_WS_URL=ws://host.docker.internal:8546 && \
 	cd ../blockscout/docker && $(MAKE) start
+
+start_blockscout_compose:
+	cd ../blockscout/docker-compose && \
+	docker-compose -f docker-compose-no-build-geth.yml up -d
+	echo "Find blockscout at http://localhost:4000"
+
+stop_blockscout_compose:
+	cd ../blockscout/docker-compose && \
+	docker-compose -d -f docker-compose-no-build-geth.yml down
 
 build:
 	go build -o crazed-nft-fans ./main

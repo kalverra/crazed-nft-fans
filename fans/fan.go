@@ -4,6 +4,7 @@ package fans
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/kalverra/crazed-nft-fans/client"
 	"github.com/kalverra/crazed-nft-fans/config"
+	"github.com/kalverra/crazed-nft-fans/guzzle"
 )
 
 // Fan is an NFT fan that searches for the NFT by incessantly bumping gas
@@ -85,16 +87,30 @@ func (f *Fan) Search() error {
 				f.searchingMutex.Unlock()
 				return
 			default:
-				f.search()
+				f.searchTx()
 			}
 		}
 	}()
 	return nil
 }
 
-func (f *Fan) search() {
-	to := common.HexToAddress("0x024c0763F8b55972Cd4a0349c79833bA9e3B2279")
-	go f.Wallet.SendTransaction(time.Second*5, big.NewFloat(1.15), to, big.NewInt(1), big.NewFloat(.001))
+func (f *Fan) searchTx() {
+	privateKey, err := crypto.GenerateKey()
+	if err != nil { // Error handling is hard
+		log.Fatal().Err(err).Msg("Error generating crypto key")
+	}
+	address, err := client.PrivateKeyToAddress(privateKey)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error converting private key to address")
+	}
+	reSendTime, reSendMult := f.reSendVals()
+	go f.Wallet.SendTransaction(
+		reSendTime,
+		reSendMult,
+		address,
+		big.NewInt(1),
+		client.WeiToEther(big.NewInt(1)),
+	)
 }
 
 // StopSearch halts the fan if it is currently searching for the NFT
@@ -107,4 +123,42 @@ func (f *Fan) IsSearching() bool {
 	f.searchingMutex.Lock()
 	defer f.searchingMutex.Unlock()
 	return f.currentlySearching
+}
+
+func (f *Fan) reSendVals() (reSendTime time.Duration, reSendGasMultiple *big.Float) {
+	switch f.CrazedLevel {
+	case 1:
+		reSendTime = time.Minute * 2
+		reSendGasMultiple = big.NewFloat(1.125)
+	case 2:
+		reSendTime = time.Minute
+		reSendGasMultiple = big.NewFloat(1.15)
+	case 3:
+		reSendTime = time.Second * 45
+		reSendGasMultiple = big.NewFloat(1.3)
+	case 4:
+		reSendTime = time.Second * 30
+		reSendGasMultiple = big.NewFloat(1.5)
+	case 5:
+		reSendTime = time.Second * 10
+		reSendGasMultiple = big.NewFloat(2)
+	}
+	return
+}
+
+func (f *Fan) Guzzle(guzzler *guzzle.Guzzle, amountOfGas uint64) error {
+	if amountOfGas >= 30_000_000 {
+		return fmt.Errorf("%d of gas is larger than the block gas limit of 30,000,000", amountOfGas)
+	}
+	opts, err := f.Wallet.TransactionOpts()
+	if err != nil {
+		return err
+	}
+	log.Debug().Uint64("Amount", amountOfGas).Msg("Guzzling Gas")
+	// opts.GasLimit = amountOfGas + 1
+	tx, err := guzzler.Guzzle(opts, big.NewInt(0).SetUint64(amountOfGas))
+	if err != nil {
+		return err
+	}
+	return f.Wallet.ConfirmTxWait(context.Background(), tx)
 }

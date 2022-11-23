@@ -31,7 +31,7 @@ test_integration: clean_test_node start_test_node
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest	
 	set -euo pipefail
 
-	go test -timeout 5m -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
+	go test -timeout 5m -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /guzzle) 2>&1 | tee /tmp/gotest.log | gotestfmt
 	-docker rm --force test-geth
 
 start_test_node:

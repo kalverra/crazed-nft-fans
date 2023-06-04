@@ -1,13 +1,15 @@
 package main
 
 import (
-	"os"
+	"log"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/kalverra/crazed-nft-fans/config"
 )
 
 func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	err := config.ReadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 }

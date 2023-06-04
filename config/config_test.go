@@ -2,18 +2,20 @@ package config_test
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"testing"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kalverra/crazed-nft-fans/config"
 )
 
 func TestMain(m *testing.M) {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	err := config.InitLogging("debug")
+	if err != nil {
+		log.Fatal(err)
+	}
 	os.Exit(m.Run())
 }
 
@@ -54,6 +56,12 @@ func TestCrazedLevel(t *testing.T) {
 
 func TestBadKey(t *testing.T) {
 	t.Setenv("FUNDING_KEY", "badKey")
+	err := config.ReadConfig()
+	require.Error(t, err, "Bad log level should have thrown an error")
+}
+
+func TestBadLogLevel(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "badLog")
 	err := config.ReadConfig()
 	require.Error(t, err, "Bad funding key should have thrown an error")
 }

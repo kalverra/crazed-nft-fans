@@ -15,24 +15,28 @@ go_mod:
 test:
 	go test -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts)
 
-test_fancy:
-	go install github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest	
-	set -euo pipefail
-
-	go test -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
-
-test_race:
-	go install github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest	
-	set -euo pipefail
-	
-	go test -race -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
-
-test_integration: clean_test_node start_test_node
+install_gotestfmt:
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest	
 	set -euo pipefail
 
-	go test -timeout 5m -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /guzzle) 2>&1 | tee /tmp/gotest.log | gotestfmt
+test_fancy: install_gotestfmt
+	go test -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
+
+test_race: install_gotestfmt
+	go test -race -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /contracts) 2>&1 | tee /tmp/gotest.log | gotestfmt
+
+test_integration: clean_test_node start_test_node install_gotestfmt
+	LOG_LEVEL="error" \
+	go test $(args) -timeout 5m -race -tags integration -count=1 -json -coverprofile=profile.cov $(shell go list ./... | grep -v /guzzle) \
+	2>&1 | tee /tmp/gotest.log | gotestfmt
 	-docker rm --force test-geth
+	go tool cover -html=profile.cov 
+
+test_integration_verbose: clean_test_node start_test_node install_gotestfmt
+	go test $(args) -timeout 5m -race -tags integration -count=1 -json -v -coverprofile=profile.cov $(shell go list ./... | grep -v /guzzle) \
+	2>&1 | tee /tmp/gotest.log | gotestfmt
+	-docker rm --force test-geth
+	go tool cover -html=profile.cov 
 
 start_test_node:
 	docker build -t kalverra/test-geth -f Dockerfile.test-geth .

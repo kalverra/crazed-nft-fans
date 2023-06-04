@@ -5,9 +5,11 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 	"math/rand"
+	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,6 +26,7 @@ type Config struct {
 	CrazedLevel       int               `envconfig:"crazed_level" default:"0"` // Crazed level for the fans
 	FundingPrivateKey *ecdsa.PrivateKey `ignored:"true"`                       // Transformed private key
 	BigChainID        *big.Int          `ignored:"true"`                       // ChainID in big.Int format
+	LogLevel          string            `envconfig:"log_level" default:"debug"`
 }
 
 // ReadConfig reads in the project config in from env vars
@@ -31,6 +34,9 @@ func ReadConfig() error {
 	var err error
 	var conf Config
 	if err = envconfig.Process("", &conf); err != nil {
+		return err
+	}
+	if err = InitLogging(conf.LogLevel); err != nil {
 		return err
 	}
 	if conf.CrazedLevel > 5 || conf.CrazedLevel < 0 {
@@ -53,6 +59,16 @@ func (c *Config) GetCrazedLevel() int {
 		crazedLevel = rand.Intn(5) + 1
 	}
 	return crazedLevel
+}
+
+// InitLogging initializes logging based on the passed in level
+func InitLogging(logLevel string) error {
+	level, err := zerolog.ParseLevel(logLevel)
+	if err != nil {
+		return err
+	}
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(level)
+	return nil
 }
 
 // CrazedLevelMappings maps the crazed level to the adjectives

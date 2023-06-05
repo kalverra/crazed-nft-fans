@@ -4,7 +4,6 @@ package config
 import (
 	"crypto/ecdsa"
 	"math/big"
-	"math/rand"
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -23,9 +22,9 @@ type Config struct {
 	ChainID uint64 `envconfig:"chain_id" default:"1337"`                  // ID of the chain
 	// Funding Key is the main key to fund fans from. Default is the default used by geth, hardhat, ganache, etc...
 	FundingKey        string            `envconfig:"funding_key" default:"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"`
-	CrazedLevel       int               `envconfig:"crazed_level" default:"0"` // Crazed level for the fans
-	FundingPrivateKey *ecdsa.PrivateKey `ignored:"true"`                       // Transformed private key
-	BigChainID        *big.Int          `ignored:"true"`                       // ChainID in big.Int format
+	CrazedLevel       string            `envconfig:"crazed_level" default:"Mixed"` // Crazed level for the fans
+	FundingPrivateKey *ecdsa.PrivateKey `ignored:"true"`                           // Transformed private key
+	BigChainID        *big.Int          `ignored:"true"`                           // ChainID in big.Int format
 	LogLevel          string            `envconfig:"log_level" default:"debug"`
 }
 
@@ -39,10 +38,20 @@ func ReadConfig() error {
 	if err = InitLogging(conf.LogLevel); err != nil {
 		return err
 	}
-	if conf.CrazedLevel > 5 || conf.CrazedLevel < 0 {
-		log.Warn().Int("Selected", conf.CrazedLevel).Msg("Invalid Crazed Level selected. Defaulting to Mixed")
-		conf.CrazedLevel = 0
+
+	// Validate the crazed level
+	legitLevel := false
+	for levelName := range CrazedLevels {
+		if levelName == conf.CrazedLevel {
+			legitLevel = true
+			break
+		}
 	}
+	if !legitLevel {
+		log.Warn().Str("Selected", conf.CrazedLevel).Msg("Invalid Crazed Level selected. Defaulting to Mixed")
+		conf.CrazedLevel = "Mixed"
+	}
+
 	conf.BigChainID = new(big.Int).SetUint64(conf.ChainID)
 	conf.FundingPrivateKey, err = crypto.HexToECDSA(conf.FundingKey)
 	if err != nil {
@@ -50,15 +59,6 @@ func ReadConfig() error {
 	}
 	Current = &conf
 	return err
-}
-
-// GetCrazedLevel retrieves the current crazed level, processing Mixed if necessary
-func (c *Config) GetCrazedLevel() int {
-	crazedLevel := c.CrazedLevel
-	if crazedLevel == 0 {
-		crazedLevel = rand.Intn(5) + 1
-	}
-	return crazedLevel
 }
 
 // InitLogging initializes logging based on the passed in level
@@ -69,14 +69,4 @@ func InitLogging(logLevel string) error {
 	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(level)
 	return nil
-}
-
-// CrazedLevelMappings maps the crazed level to the adjectives
-var CrazedLevelMappings = map[int]string{
-	0: "Mixed",
-	1: "Indifferent",
-	2: "Curious",
-	3: "Interested",
-	4: "Obsessed",
-	5: "Manic",
 }

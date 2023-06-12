@@ -7,8 +7,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/kalverra/crazed-nft-fans/config"
 	"github.com/rs/zerolog/log"
+
+	"github.com/kalverra/crazed-nft-fans/config"
 )
 
 // Fan is an NFT fan that will search for NFTs
@@ -22,6 +23,7 @@ type Fan struct {
 	stopButton          chan struct{}
 	currentlySearching  bool
 	pendingTransactions []string
+	searchingMu         sync.Mutex
 	headerMu            sync.Mutex
 }
 
@@ -45,10 +47,14 @@ func New(level *config.CrazedLevel) (*Fan, error) {
 
 // Search begins the fan's search
 func (f *Fan) Search() {
+	f.searchingMu.Lock()
+	defer f.searchingMu.Unlock()
 	f.currentlySearching = true
 	log.Info().Uint64("ID", f.ID).Str("Name", f.Name).Msg("Fan Searching!")
 	go func() {
 		<-f.stopButton
+		f.searchingMu.Lock()
+		defer f.searchingMu.Unlock()
 		log.Info().Uint64("ID", f.ID).Str("Name", f.Name).Msg("Stopping fan")
 		f.currentlySearching = false
 	}()
@@ -70,5 +76,7 @@ func (f *Fan) Stop() {
 }
 
 func (f *Fan) IsSearching() bool {
+	f.searchingMu.Lock()
+	defer f.searchingMu.Unlock()
 	return f.currentlySearching
 }

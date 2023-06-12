@@ -18,7 +18,7 @@ If using a simulated geth instance, you might find it helpful to [turn on metric
 
 ## Configure
 
-Environment variables are used to configure everything about the crazed fans.
+Environment variables are used to configure everything about the crazed fans. You can set them in a `.env` file, or export them in your shell. See the `example.env` file for an example.
 
 ```sh
 HTTP_URL="http://localhost:8545" # HTTP URL of the chain to run on
@@ -32,15 +32,9 @@ CRAZED_LEVEL="0" # See below
 
 You can set how intensely the fans will interact with the chain using the `CRAZED_LEVEL` env var. This controls how high fans will set their gas tips, and how often they decide to replace transactions with higher gas tips.
 
-```go
-var CrazedLevelMappings = map[int]string{
-  0: "Mixed", // Randomly assigns each fan one of the below statuses
-  1: "Indifferent",
-  2: "Curious",
-  3: "Interested",
-  4: "Obsessed",
-  5: "Manic",
-}
+```sh
+# Valid crazed levels, in ascending order of intensity
+CRAZED_LEVEL= Indifferent | Curious | Interested | Obsessed | Manic | Mixed # Mixed will randomize fans to different levels
 ```
 
 ## Test

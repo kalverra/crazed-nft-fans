@@ -42,16 +42,24 @@ func TestBadRead(t *testing.T) {
 }
 
 func TestCrazedLevel(t *testing.T) {
-	t.Setenv("CRAZED_LEVEL", "0")
+	t.Setenv("CRAZED_LEVEL", "Obsessed")
 	err := config.ReadConfig()
 	require.NoError(t, err, "Error reading config")
-	require.Equal(t, 0, config.Current.CrazedLevel)
-	require.NotEqual(t, 0, config.Current.GetCrazedLevel())
+	require.Equal(t, "Obsessed", config.Current.CrazedLevel)
+	require.Equal(t, "Obsessed", config.Current.GetCrazedLevel().Name)
 
-	t.Setenv("CRAZED_LEVEL", "7")
+	t.Setenv("CRAZED_LEVEL", "Invalid")
 	err = config.ReadConfig()
 	require.NoError(t, err, "Error reading config")
-	require.Equal(t, 0, config.Current.CrazedLevel, "Invalid crazed level should have been changed to 0")
+	require.Equal(t, "Mixed", config.Current.CrazedLevel, "Invalid crazed level should have been changed to Mixed")
+}
+
+func TestMixedCrazedLevel(t *testing.T) {
+	t.Setenv("CRAZED_LEVEL", "Mixed")
+	err := config.ReadConfig()
+	require.NoError(t, err, "Error reading config")
+	require.Equal(t, "Mixed", config.Current.CrazedLevel)
+	require.NotEqual(t, "Mixed", config.Current.GetCrazedLevel().Name)
 }
 
 func TestBadKey(t *testing.T) {

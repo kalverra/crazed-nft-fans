@@ -11,7 +11,9 @@ var (
 		"Turanga",
 		"Bender",
 		"Philip",
-		"Dr. John",
+		"Professor Hubert",
+		"Satoshi",
+		"Vitalik",
 	}
 
 	lastNames = []string{
@@ -21,6 +23,9 @@ var (
 		"Leela",
 		"Fry",
 		"Bending Rodriguez",
+		"Farnsworth",
+		"Nakamoto",
+		"Buterin",
 	}
 )
 

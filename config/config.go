@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/kelseyhightower/envconfig"
@@ -40,9 +41,9 @@ func ReadConfig() error {
 	}
 
 	// Validate the crazed level
-	legitLevel := false
+	legitLevel := strings.EqualFold(conf.CrazedLevel, "Mixed")
 	for levelName := range CrazedLevels {
-		if levelName == conf.CrazedLevel {
+		if strings.EqualFold(levelName, conf.CrazedLevel) {
 			legitLevel = true
 			break
 		}

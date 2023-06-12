@@ -3,6 +3,7 @@ package fans
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -12,9 +13,14 @@ import (
 )
 
 type President struct {
-	Fans   []*Fan
 	Client *ethclient.Client
-	fansMu sync.Mutex
+
+	currentBlock       uint64
+	stopSearchingBlock uint64
+	stopSearchingTime  time.Time
+	stopSearchingMu    sync.Mutex
+	fans               []*Fan
+	fansMu             sync.Mutex
 }
 
 // NewPresident creates a new president and starts watching the chain
@@ -24,7 +30,7 @@ func NewPresident() (*President, error) {
 		return nil, err
 	}
 	pres := &President{
-		Fans:   []*Fan{},
+		fans:   []*Fan{},
 		Client: client,
 	}
 	return pres, pres.watch()
@@ -32,6 +38,7 @@ func NewPresident() (*President, error) {
 
 // RecruitFans recruits a number of new fans to the president's cause
 func (p *President) RecruitFans(count int) error {
+	log.Info().Int("Fan Count", count).Msg("Recruiting fans")
 	p.fansMu.Lock()
 	defer p.fansMu.Unlock()
 	for i := 0; i < count; i++ {
@@ -39,27 +46,54 @@ func (p *President) RecruitFans(count int) error {
 		if err != nil {
 			return err
 		}
-		p.Fans = append(p.Fans, fan)
+		p.fans = append(p.fans, fan)
 	}
 	return nil
 }
 
 // ActivateFans activates all fans to start searching
 func (p *President) ActivateFans() {
+	log.Info().Msg("Activating fans")
 	p.fansMu.Lock()
 	defer p.fansMu.Unlock()
-	for _, fan := range p.Fans {
+	for _, fan := range p.fans {
 		fan.Search()
 	}
 }
 
+// ActivateFansTimeSpan activates all fans to start searching for a given duration, returning at the end of that duration
+func (p *President) ActivateFansTimeSpan(dur time.Duration) {
+	log.Info().Dur("Duration", dur).Msg("Activating fans for duration")
+	p.stopSearchingMu.Lock()
+	defer p.stopSearchingMu.Unlock()
+	p.stopSearchingTime = time.Now().Add(dur)
+	p.ActivateFans()
+}
+
+// ActivateFansBlockSpan activates all fans to start searching for a given number of blocks, returning at the end of that duration
+func (p *President) ActivateFansBlockSpan(blocks uint64) {
+	log.Info().Uint64("Blocks", blocks).Msg("Activating fans for block span")
+	p.stopSearchingMu.Lock()
+	defer p.stopSearchingMu.Unlock()
+	p.stopSearchingBlock = p.currentBlock + blocks
+	p.ActivateFans()
+}
+
 // StopFans stops all fans from searching
 func (p *President) StopFans() {
+	log.Info().Msg("Stopping fans")
 	p.fansMu.Lock()
 	defer p.fansMu.Unlock()
-	for _, fan := range p.Fans {
+	for _, fan := range p.fans {
 		fan.Stop()
 	}
+}
+
+// Fans returns all current fans
+func (p *President) Fans() []*Fan {
+	p.fansMu.Lock()
+	defer p.fansMu.Unlock()
+	return p.fans
 }
 
 // watch watches the chain, informing fans of new blocks
@@ -69,6 +103,11 @@ func (p *President) watch() error {
 	if err != nil {
 		return err
 	}
+	header, err := p.Client.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	p.currentBlock = header.Number.Uint64()
 
 	go func() {
 		defer sub.Unsubscribe()
@@ -90,10 +129,23 @@ func (p *President) watch() error {
 					Uint64("Gas Limit", header.GasLimit).
 					Msg("New Header")
 				p.fansMu.Lock()
-				for _, fan := range p.Fans {
+				p.currentBlock++
+				for _, fan := range p.fans {
 					go fan.ReceiveHeader(header)
 				}
 				p.fansMu.Unlock()
+
+				// Check if we need to stop searching after some prescribed time or block range
+				p.stopSearchingMu.Lock()
+				if p.stopSearchingBlock > 0 && p.currentBlock >= p.stopSearchingBlock {
+					p.StopFans()
+					p.stopSearchingBlock = 0
+				}
+				if !p.stopSearchingTime.IsZero() && time.Now().After(p.stopSearchingTime) {
+					p.StopFans()
+					p.stopSearchingTime = time.Time{}
+				}
+				p.stopSearchingMu.Unlock()
 			}
 		}
 	}()

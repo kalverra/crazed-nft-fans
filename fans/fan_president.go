@@ -71,11 +71,11 @@ func (p *President) ActivateFansTimeSpan(dur time.Duration) {
 }
 
 // ActivateFansBlockSpan activates all fans to start searching for a given number of blocks, returning at the end of that duration
-func (p *President) ActivateFansBlockSpan(blocks uint64) {
-	log.Info().Uint64("Blocks", blocks).Msg("Activating fans for block span")
+func (p *President) ActivateFansBlockSpan(blocks int) {
+	log.Info().Int("Blocks", blocks).Msg("Activating fans for block span")
 	p.stopSearchingMu.Lock()
 	defer p.stopSearchingMu.Unlock()
-	p.stopSearchingBlock = p.currentBlock + blocks
+	p.stopSearchingBlock = p.currentBlock + uint64(blocks)
 	p.ActivateFans()
 }
 

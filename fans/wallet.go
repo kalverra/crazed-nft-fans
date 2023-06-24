@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -26,6 +27,9 @@ type Wallet struct {
 	PrivateKey *ecdsa.PrivateKey
 	Address    common.Address
 
+	fan       *Fan
+	president *President
+
 	client              *ethclient.Client
 	pendingNonce        uint64
 	pendingMu           sync.Mutex
@@ -33,28 +37,40 @@ type Wallet struct {
 	crazedLevel         *config.CrazedLevel
 }
 
-// NewWallet creates a new wallet with a new private key
-func NewWallet(client *ethclient.Client, crazedLevel *config.CrazedLevel) (*Wallet, error) {
+// NewFanWallet creates a new wallet designed to be used by a fan
+func NewFanWallet(fan *Fan) (*Wallet, error) {
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
-	return LoadWallet(client, crazedLevel, privateKey)
-}
-
-// LoadWallet creates a new wallet with a supplied private key
-func LoadWallet(
-	client *ethclient.Client,
-	crazedLevel *config.CrazedLevel,
-	privateKey *ecdsa.PrivateKey,
-) (*Wallet, error) {
-	pendingNonce, err := client.PendingNonceAt(context.Background(), crypto.PubkeyToAddress(privateKey.PublicKey))
+	pendingNonce, err := fan.client.PendingNonceAt(context.Background(), crypto.PubkeyToAddress(privateKey.PublicKey))
 	if err != nil {
 		return nil, err
 	}
 	return &Wallet{
 		PrivateKey: privateKey,
 		Address:    crypto.PubkeyToAddress(privateKey.PublicKey),
+
+		fan: fan,
+
+		client:              fan.client,
+		pendingNonce:        pendingNonce,
+		pendingTransactions: []*TrackedTransaction{},
+		crazedLevel:         fan.CrazedLevel,
+	}, nil
+}
+
+// NewPresidentWallet creates a new wallet designed to be used by a president
+func NewPresidentWallet(president *President) (*Wallet, error) {
+	pendingNonce, err := president.Client.PendingNonceAt(context.Background(), crypto.PubkeyToAddress(privateKey.PublicKey))
+	if err != nil {
+		return nil, err
+	}
+	return &Wallet{
+		PrivateKey: privateKey,
+		Address:    crypto.PubkeyToAddress(privateKey.PublicKey),
+
+		president: &Pr,
 
 		client:              client,
 		pendingNonce:        pendingNonce,
@@ -64,9 +80,9 @@ func LoadWallet(
 }
 
 // UpdatePendingTxs updates the wallet's pending transactions, removing mined transactions and resending timed out transactions
-func (w *Wallet) UpdatePendingTxs(block *types.Block) {
+func (w *Wallet) UpdatePendingTxs(latestBlock *types.Block) {
 	for index, tx := range w.pendingTransactions {
-		if block.Transaction(tx.Transaction.Hash()) != nil { // transaction was mined
+		if latestBlock.Transaction(tx.Transaction.Hash()) != nil { // transaction was mined
 			w.pendingTransactions = append(w.pendingTransactions[:index], w.pendingTransactions[index+1:]...)
 			continue
 		}
@@ -75,7 +91,7 @@ func (w *Wallet) UpdatePendingTxs(block *types.Block) {
 			oldTip := big.NewFloat(0).SetInt64(tx.Transaction.GasTipCap().Int64())
 			newGasTip := oldTip.Mul(oldTip, big.NewFloat(w.crazedLevel.GasPriceMultiplier))
 			newGasUint, _ := newGasTip.Uint64()
-			w.sendTx(tx.Transaction.Nonce(), big.NewInt(0).SetUint64(newGasUint))
+			w.reSendTx(tx.Transaction.Nonce(), big.NewInt(0).SetUint64(newGasUint))
 		}
 	}
 }
@@ -89,39 +105,68 @@ func (w *Wallet) PendingTransactions() []*TrackedTransaction {
 
 // SendTransaction sends a transaction to the chain and tracks and re-sends it if it times out
 func (w *Wallet) SendTransaction(latestBlock *types.Block, to common.Address, value *big.Int) error {
-	w.pendingMu.Lock()
-	defer w.pendingMu.Unlock()
-
-	tx := &types.DynamicFeeTx{
-		ChainID: config.Current.BigChainID,
-		Nonce:   w.pendingNonce,
-		To:      &to,
-		Value:   value,
-		Gas:     21_000,
+	gasUnits, baseFee, gasTipCapFloat, err := w.estimateGas(latestBlock, to)
+	if err != nil {
+		return err
 	}
-	unsignedTx.S
+	gasTipCap := new(big.Int)
+	gasTipCapFloat.Int(gasTipCap)
+	gasFeeCap := big.NewInt(0).Add(baseFee, gasTipCap)
+
+	tx, err := types.SignNewTx(w.PrivateKey, types.LatestSignerForChainID(config.Current.BigChainID), &types.DynamicFeeTx{
+		ChainID:   config.Current.BigChainID,
+		Nonce:     w.pendingNonce,
+		To:        &to,
+		Value:     value,
+		Gas:       gasUnits,
+		GasTipCap: gasTipCap,
+		GasFeeCap: gasFeeCap,
+	})
+	if err != nil {
+		return err
+	}
 	ttx := &TrackedTransaction{
 		Transaction: tx,
 		timeSent:    time.Now(),
 	}
+
+	w.pendingMu.Lock()
+	defer w.pendingMu.Unlock()
 	w.pendingTransactions = append(w.pendingTransactions, ttx)
-	w.sendTx(latestBlock, nonce, gasTipCap)
+	return w.client.SendTransaction(context.Background(), tx)
 }
 
-func (w *Wallet) sendTx(latestBlock *types.Block, nonce uint64, gasTipCap *big.Int) error {
-	baseFee := big.NewInt(0).Mul(latestBlock.BaseFee(), big.NewInt(2))
+func (w *Wallet) reSendTx(latestBlock *types.Block, oldTx *TrackedTransaction) error {
+	w.pendingMu.Lock()
+	defer w.pendingMu.Unlock()
+
+	gasUnits, baseFee, gasTipCapFloat, err := w.estimateGas(latestBlock, tx.Transaction.To())
+	if err != nil {
+		return err
+	}
+	gasTipCap := new(big.Int)
+	gasTipCapFloat.Int(gasTipCap)
 	gasFeeCap := big.NewInt(0).Add(baseFee, gasTipCap)
 
+	newTx, err := types.SignNewTx(w.PrivateKey, types.LatestSignerForChainID(config.Current.BigChainID), &types.DynamicFeeTx{
+		ChainID:   config.Current.BigChainID,
+		Nonce:     w.pendingNonce,
+		To:        &to,
+		Value:     value,
+		Gas:       gasUnits,
+		GasTipCap: gasTipCap,
+		GasFeeCap: gasFeeCap,
+	})
 	if err != nil {
-		log.Error().Err(err).
-			Uint64("Nonce", nonce).
-			Uint64("Gas Tip Cap", gasTipCap.Uint64()).
-			Uint64("Gas Fee Cap", gasFeeCap.Uint64()).
-			Msg("Error signing transaction")
 		return err
+	}
+	tx = &TrackedTransaction{
+		Transaction: newTx,
+		timeSent:    time.Now(),
 	}
 }
 
+// stopTracking stops tracking a transaction and removes it from the pending transactions list
 func (w *Wallet) stopTracking(txHash common.Hash) {
 	w.pendingMu.Lock()
 	defer w.pendingMu.Unlock()
@@ -132,4 +177,28 @@ func (w *Wallet) stopTracking(txHash common.Hash) {
 			return
 		}
 	}
+}
+
+// estimateGas estimates the gas for the transaction, and the gas fee cap as a float for easier multiplication
+func (w *Wallet) estimateGas(latestBlock *types.Block, to *common.Address) (
+	gas uint64,
+	baseFee *big.Int,
+	gasTipCap *big.Float,
+	err error,
+) {
+	msg := ethereum.CallMsg{
+		From: w.Address,
+		To:   to,
+	}
+	gas, err = w.client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	suggestedGasTipCap, err := w.client.SuggestGasTipCap(context.Background())
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	gasTipCap = big.NewFloat(0).SetInt64(suggestedGasTipCap.Int64())
+	baseFee = big.NewInt(0).Mul(latestBlock.BaseFee(), big.NewInt(2))
+	return gas, baseFee, gasTipCap, err
 }

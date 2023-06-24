@@ -3,12 +3,12 @@ package fans
 import (
 	"context"
 	"crypto/ecdsa"
-	"math/rand"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/kalverra/crazed-nft-fans/config"
@@ -16,7 +16,7 @@ import (
 
 // Fan is an NFT fan that will search for NFTs
 type Fan struct {
-	ID          uint64
+	ID          string
 	Name        string
 	Address     string
 	PrivateKey  *ecdsa.PrivateKey
@@ -24,7 +24,6 @@ type Fan struct {
 
 	wallet             *Wallet
 	client             *ethclient.Client
-	pendingNonce       uint64
 	stopButton         chan struct{}
 	currentlySearching bool
 	searchingMu        sync.Mutex
@@ -37,21 +36,20 @@ func New(president *President, level *config.CrazedLevel) (*Fan, error) {
 	if err != nil {
 		return nil, err
 	}
-	wallet, err := LoadWallet(president.Client, level, config.Current.FundingPrivateKey)
-	if err != nil {
-		return nil, err
-	}
 	fan := &Fan{
-		ID:          rand.Uint64(),
+		ID:          xid.New().String(),
 		Name:        generateName(),
 		Address:     crypto.PubkeyToAddress(privateKey.PublicKey).Hex(),
 		PrivateKey:  privateKey,
 		CrazedLevel: level,
 
-		wallet:             wallet,
 		stopButton:         make(chan struct{}),
 		currentlySearching: false,
 		blockChan:          make(chan *types.Block),
+	}
+	fan.wallet, err = NewFanWallet(fan)
+	if err != nil {
+		return nil, err
 	}
 	if president != nil { // nil president for testing
 		fan.client = president.Client
@@ -64,7 +62,7 @@ func (f *Fan) Search() {
 	f.searchingMu.Lock()
 	defer f.searchingMu.Unlock()
 	f.currentlySearching = true
-	log.Info().Uint64("ID", f.ID).Str("Name", f.Name).Msg("Fan Searching!")
+	log.Info().Str("ID", f.ID).Str("Name", f.Name).Msg("Fan Searching!")
 	go f.searchLoop()
 }
 
@@ -74,7 +72,7 @@ func (f *Fan) searchLoop() {
 		select {
 		case <-f.stopButton:
 			f.searchingMu.Lock()
-			log.Info().Uint64("ID", f.ID).Str("Name", f.Name).Msg("Stopping fan")
+			log.Info().Str("ID", f.ID).Str("Name", f.Name).Msg("Stopping fan")
 			f.currentlySearching = false
 			f.searchingMu.Unlock()
 			return
@@ -97,7 +95,7 @@ func (f *Fan) ReceiveBlock(block *types.Block) {
 		return
 	}
 	f.blockChan <- block
-	log.Trace().Uint64("Fan ID", f.ID).Str("Crazed Level", f.CrazedLevel.Name).Str("Fan Name", f.Name).Msg("Received new header")
+	log.Trace().Str("Fan ID", f.ID).Str("Crazed Level", f.CrazedLevel.Name).Str("Fan Name", f.Name).Msg("Received new header")
 }
 
 // Stop stops the fan's search

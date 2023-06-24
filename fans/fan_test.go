@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 func TestNewFan(t *testing.T) {
 	t.Parallel()
 
-	fan, err := fans.New(config.Manic)
+	fan, err := fans.New(nil, config.Manic)
 	require.NoError(t, err, "Error creating new fan")
 	require.NotNil(t, fan, "Fan should not be nil")
 }

@@ -15,6 +15,4 @@ flowchart LR
     Timeout --> BG[BumpGas]
     BG --> SG
     W --> Suc[Success]
-    Suc --> SG
-
 ```

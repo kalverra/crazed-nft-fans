@@ -13,9 +13,11 @@ import (
 )
 
 type President struct {
-	Client *ethclient.Client
+	Client            *ethclient.Client
+	LatestBlock       *types.Block
+	LatestBlockNumber uint64
+	blockUpdateMu     sync.Mutex
 
-	currentBlock       uint64
 	stopSearchingBlock uint64
 	stopSearchingTime  time.Time
 	stopSearchingMu    sync.Mutex
@@ -42,7 +44,7 @@ func (p *President) RecruitFans(count int) error {
 	p.fansMu.Lock()
 	defer p.fansMu.Unlock()
 	for i := 0; i < count; i++ {
-		fan, err := New(config.Current.GetCrazedLevel())
+		fan, err := New(p, config.Current.GetCrazedLevel())
 		if err != nil {
 			return err
 		}
@@ -75,7 +77,7 @@ func (p *President) ActivateFansBlockSpan(blocks int) {
 	log.Info().Int("Blocks", blocks).Msg("Activating fans for block span")
 	p.stopSearchingMu.Lock()
 	defer p.stopSearchingMu.Unlock()
-	p.stopSearchingBlock = p.currentBlock + uint64(blocks)
+	p.stopSearchingBlock = p.GetLatestBlockNumber() + uint64(blocks)
 	p.ActivateFans()
 }
 
@@ -107,7 +109,7 @@ func (p *President) watch() error {
 	if err != nil {
 		return err
 	}
-	p.currentBlock = header.Number.Uint64()
+	p.LatestBlockNumber = header.Number.Uint64()
 
 	go func() {
 		defer sub.Unsubscribe()
@@ -122,27 +124,40 @@ func (p *President) watch() error {
 					log.Error().Err(err).Msg("Error in subscription, retrying")
 				}
 			case header := <-headerChannel:
+				var block *types.Block
 				log.Debug().
 					Str("Hash", header.Hash().Hex()).
 					Uint64("Number", header.Number.Uint64()).
 					Uint64("Gas Used", header.GasUsed).
 					Uint64("Gas Limit", header.GasLimit).
 					Msg("New Header")
+					// Get the full block so we can comb through the transactions ourselves and not overload the chain/RPC
+				block, err = p.Client.BlockByHash(context.Background(), header.Hash())
+				if err != nil {
+					log.Error().Err(err).Str("Hash", header.Hash().Hex()).Uint64("Number", header.Number.Uint64()).Msg("Error getting block from header")
+					continue
+				}
+				p.blockUpdateMu.Lock()
+				p.LatestBlock = block
+				p.LatestBlockNumber++
+				p.blockUpdateMu.Unlock()
+
 				p.fansMu.Lock()
-				p.currentBlock++
 				for _, fan := range p.fans {
-					go fan.ReceiveHeader(header)
+					go fan.ReceiveBlock(block)
 				}
 				p.fansMu.Unlock()
 
 				// Check if we need to stop searching after some prescribed time or block range
 				p.stopSearchingMu.Lock()
-				if p.stopSearchingBlock > 0 && p.currentBlock >= p.stopSearchingBlock {
+				if p.stopSearchingBlock > 0 && p.GetLatestBlockNumber() >= p.stopSearchingBlock {
 					p.StopFans()
+					log.Info().Uint64("Stop Block", p.stopSearchingBlock).Msg("Stopped fan search")
 					p.stopSearchingBlock = 0
 				}
 				if !p.stopSearchingTime.IsZero() && time.Now().After(p.stopSearchingTime) {
 					p.StopFans()
+					log.Info().Time("Stop Time", p.stopSearchingTime).Msg("Stopped fan search")
 					p.stopSearchingTime = time.Time{}
 				}
 				p.stopSearchingMu.Unlock()
@@ -150,4 +165,16 @@ func (p *President) watch() error {
 		}
 	}()
 	return err
+}
+
+func (p *President) GetLatestBlock() *types.Block {
+	p.blockUpdateMu.Lock()
+	defer p.blockUpdateMu.Unlock()
+	return p.LatestBlock
+}
+
+func (p *President) GetLatestBlockNumber() uint64 {
+	p.blockUpdateMu.Lock()
+	defer p.blockUpdateMu.Unlock()
+	return p.LatestBlockNumber
 }

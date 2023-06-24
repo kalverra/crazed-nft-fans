@@ -1,4 +1,4 @@
-package client_test
+package convert_test
 
 import (
 	"math/big"
@@ -7,13 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kalverra/crazed-nft-fans/client"
+	"github.com/kalverra/crazed-nft-fans/convert"
 )
 
 func TestPrivToAddr(t *testing.T) {
 	privateKey, err := crypto.GenerateKey()
 	require.NoError(t, err, "Error generating new private key")
-	addr, err := client.PrivateKeyToAddress(privateKey)
+	addr, err := convert.PrivateKeyToAddress(privateKey)
 	require.NoError(t, err, "Error converting key to address")
 	require.NotNil(t, addr, "Nil address")
 	require.NotEmpty(t, addr, "Empty address")
@@ -24,12 +24,12 @@ func TestConversions(t *testing.T) {
 	gwei := big.NewFloat(1500000000)
 	eth := big.NewFloat(1.5)
 
-	weiVal := client.EtherToWei(eth)
+	weiVal := convert.EtherToWei(eth)
 	require.Equal(t, 0, weiVal.Cmp(wei), "1.5 Ether converted incorrectly")
 
-	ethVal := client.WeiToEther(wei)
+	ethVal := convert.WeiToEther(wei)
 	require.Equal(t, 0, ethVal.Cmp(eth), "1.5 Ether converted incorrectly")
 
-	gweiVal := client.WeiToGwei(wei)
+	gweiVal := convert.WeiToGwei(wei)
 	require.Equal(t, 0, gweiVal.Cmp(gwei), "1.5 Ether converted incorrectly")
 }

@@ -1,4 +1,4 @@
-package client
+package convert
 
 import (
 	"crypto/ecdsa"

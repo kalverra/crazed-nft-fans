@@ -1,10 +1,11 @@
 package fans
 
 import (
-	"context"
 	"crypto/ecdsa"
+	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -12,13 +13,14 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/kalverra/crazed-nft-fans/config"
+	"github.com/kalverra/crazed-nft-fans/convert"
 )
 
 // Fan is an NFT fan that will search for NFTs
 type Fan struct {
 	ID          string
 	Name        string
-	Address     string
+	Address     *common.Address
 	PrivateKey  *ecdsa.PrivateKey
 	CrazedLevel *config.CrazedLevel
 
@@ -31,28 +33,27 @@ type Fan struct {
 }
 
 // New creates a new fan at a supplied crazed level
-func New(president *President, level *config.CrazedLevel) (*Fan, error) {
+func New(client *ethclient.Client, level *config.CrazedLevel) (*Fan, error) {
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
+	addr := crypto.PubkeyToAddress(privateKey.PublicKey)
 	fan := &Fan{
 		ID:          xid.New().String(),
 		Name:        generateName(),
-		Address:     crypto.PubkeyToAddress(privateKey.PublicKey).Hex(),
+		Address:     &addr,
 		PrivateKey:  privateKey,
 		CrazedLevel: level,
 
+		client:             client,
 		stopButton:         make(chan struct{}),
 		currentlySearching: false,
 		blockChan:          make(chan *types.Block),
 	}
-	fan.wallet, err = NewFanWallet(fan)
+	fan.wallet, err = NewWallet(fan.ID, fan.Name, client, level)
 	if err != nil {
 		return nil, err
-	}
-	if president != nil { // nil president for testing
-		fan.client = president.Client
 	}
 	return fan, nil
 }
@@ -77,13 +78,26 @@ func (f *Fan) searchLoop() {
 			f.searchingMu.Unlock()
 			return
 		case newBlock := <-f.blockChan:
-			f.wallet.UpdatePendingTxs(newBlock)
-			if len(f.wallet.PendingTransactions()) < f.CrazedLevel.MaxPendingTransactions {
-				initialTipCap, err := f.client.SuggestGasTipCap(context.Background())
+			stillPendingCount, err := f.wallet.UpdatePendingTxs(newBlock)
+			if err != nil {
+				log.Error().Err(err).Str("Fan", f.Name).Str("ID", f.ID).Msg("Error updating pending transactions")
+				continue
+			}
+			if stillPendingCount < f.CrazedLevel.MaxPendingTransactions {
+				randomKey, err := crypto.GenerateKey()
 				if err != nil {
-					log.Error().Err(err).Msg("Error getting suggested gas tip cap")
+					log.Error().Err(err).Msg("Error generating new private key")
+					continue
 				}
-				f.wallet.SendTransaction(f.pendingNonce, initialTipCap)
+				randomAddr, err := convert.PrivateKeyToAddress(randomKey)
+				if err != nil {
+					log.Error().Err(err).Msg("Error generating new address")
+					continue
+				}
+				_, err = f.wallet.SendTransaction(newBlock, randomAddr, big.NewInt(42069))
+				if err != nil {
+					log.Error().Err(err).Str("Fan", f.Name).Str("ID", f.ID).Msg("Error sending transaction")
+				}
 			}
 		}
 	}

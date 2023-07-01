@@ -47,6 +47,12 @@ var (
 		TransactionTimeout:     time.Second * 10,
 		GasPriceMultiplier:     2.0,
 	}
+	President = &CrazedLevel{
+		Name:                   "President",
+		MaxPendingTransactions: 1000,
+		TransactionTimeout:     time.Second * 10,
+		GasPriceMultiplier:     1.1,
+	}
 )
 
 type CrazedLevel struct {

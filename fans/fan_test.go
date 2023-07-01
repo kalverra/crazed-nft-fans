@@ -5,10 +5,13 @@ package fans_test
 
 import (
 	"context"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/onsi/gomega"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +33,9 @@ func TestMain(m *testing.M) {
 func TestNewFan(t *testing.T) {
 	t.Parallel()
 
-	fan, err := fans.New(nil, config.Manic)
+	client, err := ethclient.Dial(config.Current.WS)
+	require.NoError(t, err, "Error dialing client")
+	fan, err := fans.New(client, config.Manic)
 	require.NoError(t, err, "Error creating new fan")
 	require.NotNil(t, fan, "Fan should not be nil")
 }
@@ -71,7 +76,7 @@ func TestStop(t *testing.T) {
 	require.GreaterOrEqual(t, fansStopped, fanCount, "Expected at least %d fans to be stopped, found %d searching", fanCount, fansSearching)
 }
 
-func TestActivateTimeSpan(t *testing.T) {
+func TestActivationTimeSpan(t *testing.T) {
 	t.Parallel()
 
 	expectedDuration, failureDuration := time.Second, 2*time.Second
@@ -79,7 +84,9 @@ func TestActivateTimeSpan(t *testing.T) {
 	startTime := time.Now()
 	president.ActivateFansTimeSpan(expectedDuration)
 	fansSearching, fansStopped := countFansStatus(t, president)
-	assert.GreaterOrEqual(t, fansSearching, fanCount, "Expected at least %d fans to be searching, found %d stopped", fanCount, fansStopped)
+	assert.GreaterOrEqual(t, fansSearching, fanCount,
+		"Expected at least %d fans to be searching, found %d stopped", fanCount, fansStopped,
+	)
 
 	for range time.Tick(time.Millisecond * 50) {
 		fansSearching, fansStopped = countFansStatus(t, president)
@@ -87,8 +94,12 @@ func TestActivateTimeSpan(t *testing.T) {
 			break
 		}
 	}
-	require.GreaterOrEqual(t, time.Since(startTime), expectedDuration, "Expected fans to stop searching after at least %s, but they're still going after %s", failureDuration, time.Since(startTime))
-	require.Less(t, time.Since(startTime), failureDuration, "Expected fans to stop searching after at least %s, but they're still going after %s", failureDuration, time.Since(startTime))
+	require.GreaterOrEqual(t, time.Since(startTime), expectedDuration,
+		"Expected fans to stop searching after at least %s, but they're still going after %s", failureDuration, time.Since(startTime),
+	)
+	require.Less(t, time.Since(startTime), failureDuration,
+		"Expected fans to stop searching after at least %s, but they're still going after %s", failureDuration, time.Since(startTime),
+	)
 }
 
 func TestActivateBlockSpan(t *testing.T) {
@@ -121,6 +132,27 @@ testLoop:
 	}
 	require.GreaterOrEqual(t, blocksSeen, 2, "Expected to see at least %d blocks before fans stopped, but saw %d", 2, blocksSeen)
 	require.Less(t, blocksSeen, maxBlocks, "Expected to see less than %d blocks before fans stopped, but saw %d", maxBlocks, blocksSeen)
+}
+
+func TestFunding(t *testing.T) {
+	t.Parallel()
+
+	president := setupPresident(t)
+	err := president.FundFans(big.NewInt(42069))
+	require.NoError(t, err, "Error funding fans")
+
+	client, err := ethclient.Dial(config.Current.WS)
+	require.NoError(t, err, "Error dialing client")
+
+	gom := gomega.NewGomegaWithT(t)
+	gom.Eventually(func(g gomega.Gomega) {
+		for _, fan := range president.Fans() {
+			balance, err := client.BalanceAt(context.Background(), *fan.Address, nil)
+			g.Expect(err).To(gomega.BeNil())
+			g.Expect(big.NewInt(42069).Cmp(balance)).To(gomega.BeNumerically(">=", 0))
+		}
+	}, "10s", "1s").Should(gomega.Succeed())
+
 }
 
 func countFansStatus(t *testing.T, president *fans.President) (fansSearching int, fansStopped int) {

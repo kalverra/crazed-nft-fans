@@ -12,13 +12,14 @@ import (
 )
 
 // PrivateKeyToAddress is a handy converter for an ecdsa private key to a usable eth address
-func PrivateKeyToAddress(privateKey *ecdsa.PrivateKey) (common.Address, error) {
+func PrivateKeyToAddress(privateKey *ecdsa.PrivateKey) (*common.Address, error) {
 	publicKeyECDSA, ok := privateKey.Public().(*ecdsa.PublicKey)
 	if !ok {
-		return common.Address{}, fmt.Errorf(
-			"error converting public key to ecdsa format. private key: %s public key: %s", privateKey, privateKey.Public())
+		return nil, fmt.Errorf(
+			"error converting public key to ecdsa format, I'm surprised you managed to break this private key: %s public key: %s", privateKey, privateKey.Public())
 	}
-	return crypto.PubkeyToAddress(*publicKeyECDSA), nil
+	addr := crypto.PubkeyToAddress(*publicKeyECDSA)
+	return &addr, nil
 }
 
 // PrivateKeyString easy converter of a private key to its hex format

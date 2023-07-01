@@ -2,6 +2,10 @@ package fans
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"fmt"
+	"math/big"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -16,8 +20,10 @@ type President struct {
 	Client            *ethclient.Client
 	LatestBlock       *types.Block
 	LatestBlockNumber uint64
+	PrivateKey        *ecdsa.PrivateKey
 	blockUpdateMu     sync.Mutex
 
+	wallet             *Wallet
 	stopSearchingBlock uint64
 	stopSearchingTime  time.Time
 	stopSearchingMu    sync.Mutex
@@ -32,8 +38,29 @@ func NewPresident() (*President, error) {
 		return nil, err
 	}
 	pres := &President{
-		fans:   []*Fan{},
-		Client: client,
+		fans:       []*Fan{},
+		Client:     client,
+		PrivateKey: config.Current.FundingPrivateKey,
+	}
+
+	wallet, err := LoadWallet(config.Current.FundingPrivateKey, fmt.Sprint(rand.Uint64()), "president", pres.Client, config.President)
+	if err != nil {
+		return nil, err
+	}
+	pres.wallet = wallet
+	return pres, pres.watch()
+}
+
+func NewPresidentWithWallet(wallet *Wallet) (*President, error) {
+	client, err := ethclient.Dial(config.Current.WS)
+	if err != nil {
+		return nil, err
+	}
+	pres := &President{
+		wallet:     wallet,
+		fans:       []*Fan{},
+		Client:     client,
+		PrivateKey: config.Current.FundingPrivateKey,
 	}
 	return pres, pres.watch()
 }
@@ -44,11 +71,25 @@ func (p *President) RecruitFans(count int) error {
 	p.fansMu.Lock()
 	defer p.fansMu.Unlock()
 	for i := 0; i < count; i++ {
-		fan, err := New(p, config.Current.GetCrazedLevel())
+		fan, err := New(p.Client, config.Current.GetCrazedLevel())
 		if err != nil {
 			return err
 		}
 		p.fans = append(p.fans, fan)
+	}
+	return nil
+}
+
+// FundFans funds all the president's fans
+func (p *President) FundFans(value *big.Int) error {
+	log.Info().Uint64("Value", value.Uint64()).Msg("Funding Fans")
+	p.fansMu.Lock()
+	defer p.fansMu.Unlock()
+	for _, fan := range p.fans {
+		_, err := p.wallet.SendTransaction(p.LatestBlock, fan.Address, value)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -65,7 +106,7 @@ func (p *President) ActivateFans() {
 
 // ActivateFansTimeSpan activates all fans to start searching for a given duration, returning at the end of that duration
 func (p *President) ActivateFansTimeSpan(dur time.Duration) {
-	log.Info().Dur("Duration", dur).Msg("Activating fans for duration")
+	log.Info().Str("Duration", dur.String()).Msg("Activating fans for duration")
 	p.stopSearchingMu.Lock()
 	defer p.stopSearchingMu.Unlock()
 	p.stopSearchingTime = time.Now().Add(dur)
@@ -109,11 +150,15 @@ func (p *President) watch() error {
 	if err != nil {
 		return err
 	}
+	p.LatestBlock, err = p.Client.BlockByNumber(context.Background(), nil)
+	if err != nil {
+		return err
+	}
 	p.LatestBlockNumber = header.Number.Uint64()
 
 	go func() {
 		defer sub.Unsubscribe()
-		for {
+		for { // We're assuming that the RPC/chain is a reliable one. This is a false assumption if ever running in the real world
 			select {
 			case err = <-sub.Err():
 				sub.Unsubscribe()
@@ -142,6 +187,13 @@ func (p *President) watch() error {
 				p.LatestBlockNumber++
 				p.blockUpdateMu.Unlock()
 
+				_, err = p.wallet.UpdatePendingTxs(block)
+				if err != nil {
+					log.Error().Err(err).
+						Str("Block Hash", block.Hash().Hex()).
+						Uint64("Block Number", block.NumberU64()).
+						Msg("Error updating pending transactions for president")
+				}
 				p.fansMu.Lock()
 				for _, fan := range p.fans {
 					go fan.ReceiveBlock(block)
@@ -164,7 +216,7 @@ func (p *President) watch() error {
 			}
 		}
 	}()
-	return err
+	return nil
 }
 
 func (p *President) GetLatestBlock() *types.Block {

@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/onsi/gomega v1.19.0
 	github.com/rs/xid v1.4.0
 	github.com/rs/zerolog v1.29.0
 	github.com/stretchr/testify v1.8.2
@@ -32,8 +33,11 @@ require (
 	github.com/tklauser/numcpus v0.5.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

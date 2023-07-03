@@ -153,6 +153,8 @@ func TestFunding(t *testing.T) {
 		}
 	}, "10s", "1s").Should(gomega.Succeed())
 
+	president.ActivateFans()
+	time.Sleep(5 * time.Minute)
 }
 
 func countFansStatus(t *testing.T, president *fans.President) (fansSearching int, fansStopped int) {

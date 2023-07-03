@@ -3,9 +3,8 @@ package fans
 import (
 	"context"
 	"crypto/ecdsa"
-	"fmt"
+	"errors"
 	"math/big"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -43,7 +42,7 @@ func NewPresident() (*President, error) {
 		PrivateKey: config.Current.FundingPrivateKey,
 	}
 
-	wallet, err := LoadWallet(config.Current.FundingPrivateKey, fmt.Sprint(rand.Uint64()), "president", pres.Client, config.President)
+	wallet, err := LoadWallet(config.Current.FundingPrivateKey, "president", "president", pres.Client, config.President)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +67,8 @@ func NewPresidentWithWallet(wallet *Wallet) (*President, error) {
 // RecruitFans recruits a number of new fans to the president's cause
 func (p *President) RecruitFans(count int) error {
 	log.Info().Int("Fan Count", count).Msg("Recruiting fans")
-	p.fansMu.Lock()
-	defer p.fansMu.Unlock()
+	// p.fansMu.Lock()
+	// defer p.fansMu.Unlock()
 	for i := 0; i < count; i++ {
 		fan, err := New(p.Client, config.Current.GetCrazedLevel())
 		if err != nil {
@@ -83,25 +82,37 @@ func (p *President) RecruitFans(count int) error {
 // FundFans funds all the president's fans
 func (p *President) FundFans(value *big.Int) error {
 	log.Info().Uint64("Value", value.Uint64()).Msg("Funding Fans")
-	p.fansMu.Lock()
-	defer p.fansMu.Unlock()
+	// p.fansMu.Lock()
+	// defer p.fansMu.Unlock()
 	for _, fan := range p.fans {
-		_, err := p.wallet.SendTransaction(p.LatestBlock, fan.Address, value)
+		err := p.wallet.SendTransaction(p.LatestBlock, fan.Address, value)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+	tick, timeout := time.NewTicker(time.Millisecond*500), time.NewTimer(time.Second*10)
+	for {
+		select {
+		case <-tick.C:
+			log.Debug().Int("Count", len(p.wallet.PendingTransactions())).Msg("Pending Txs")
+			if len(p.wallet.PendingTransactions()) == 0 {
+				return nil
+			}
+		case <-timeout.C:
+			return errors.New("timed out waiting for transactions to be mined")
+		}
+	}
 }
 
 // ActivateFans activates all fans to start searching
 func (p *President) ActivateFans() {
 	log.Info().Msg("Activating fans")
-	p.fansMu.Lock()
-	defer p.fansMu.Unlock()
+	// p.fansMu.Lock()
+	// defer p.fansMu.Unlock()
 	for _, fan := range p.fans {
 		fan.Search()
 	}
+	log.Info().Int("Count", len(p.fans)).Msg("Activated fans")
 }
 
 // ActivateFansTimeSpan activates all fans to start searching for a given duration, returning at the end of that duration
@@ -125,8 +136,8 @@ func (p *President) ActivateFansBlockSpan(blocks int) {
 // StopFans stops all fans from searching
 func (p *President) StopFans() {
 	log.Info().Msg("Stopping fans")
-	p.fansMu.Lock()
-	defer p.fansMu.Unlock()
+	// p.fansMu.Lock()
+	// defer p.fansMu.Unlock()
 	for _, fan := range p.fans {
 		fan.Stop()
 	}
@@ -134,8 +145,8 @@ func (p *President) StopFans() {
 
 // Fans returns all current fans
 func (p *President) Fans() []*Fan {
-	p.fansMu.Lock()
-	defer p.fansMu.Unlock()
+	// p.fansMu.Lock()
+	// defer p.fansMu.Unlock()
 	return p.fans
 }
 
@@ -194,11 +205,9 @@ func (p *President) watch() error {
 						Uint64("Block Number", block.NumberU64()).
 						Msg("Error updating pending transactions for president")
 				}
-				p.fansMu.Lock()
 				for _, fan := range p.fans {
 					go fan.ReceiveBlock(block)
 				}
-				p.fansMu.Unlock()
 
 				// Check if we need to stop searching after some prescribed time or block range
 				p.stopSearchingMu.Lock()

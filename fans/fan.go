@@ -1,6 +1,7 @@
 package fans
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"math/big"
 	"sync"
@@ -51,7 +52,7 @@ func New(client *ethclient.Client, level *config.CrazedLevel) (*Fan, error) {
 		currentlySearching: false,
 		blockChan:          make(chan *types.Block),
 	}
-	fan.wallet, err = NewWallet(fan.ID, fan.Name, client, level)
+	fan.wallet, err = LoadWallet(privateKey, fan.ID, fan.Name, client, level)
 	if err != nil {
 		return nil, err
 	}
@@ -94,9 +95,19 @@ func (f *Fan) searchLoop() {
 					log.Error().Err(err).Msg("Error generating new address")
 					continue
 				}
-				_, err = f.wallet.SendTransaction(newBlock, randomAddr, big.NewInt(42069))
+				err = f.wallet.SendTransaction(newBlock, randomAddr, big.NewInt(42069))
 				if err != nil {
-					log.Error().Err(err).Str("Fan", f.Name).Str("ID", f.ID).Msg("Error sending transaction")
+					bal, balErr := f.client.BalanceAt(context.Background(), *f.Address, nil)
+					if balErr != nil {
+						log.Error().Err(err).Str("Fan", f.Name).Str("ID", f.ID).Msg("Error getting balance after failing to send transaction")
+					} else {
+						log.Error().Err(err).
+							Str("From", f.Address.Hex()).
+							Str("Fan", f.Name).
+							Uint64("Balance", bal.Uint64()).
+							Str("ID", f.ID).
+							Msg("Error sending transaction")
+					}
 				}
 			}
 		}

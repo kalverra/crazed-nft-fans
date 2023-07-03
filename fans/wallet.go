@@ -71,11 +71,7 @@ func LoadWallet(privateKey *ecdsa.PrivateKey, id, name string, client *ethclient
 func (w *Wallet) UpdatePendingTxs(latestBlock *types.Block) (int, error) {
 	w.pendingMu.Lock()
 	defer w.pendingMu.Unlock()
-	log.Trace().
-		Str("Name", w.Name).
-		Str("ID", w.ID).
-		Int("Pending Transactions", len(w.pendingTransactions)).
-		Msg("Updating pending transactions")
+	startPendingCount := len(w.pendingTransactions)
 
 	pendingTxs := []*TrackedTransaction{}
 	for _, tx := range w.pendingTransactions {
@@ -90,6 +86,12 @@ func (w *Wallet) UpdatePendingTxs(latestBlock *types.Block) (int, error) {
 		}
 	}
 	w.pendingTransactions = pendingTxs
+	log.Trace().
+		Str("Name", w.Name).
+		Str("ID", w.ID).
+		Int("Start Pending Count", startPendingCount).
+		Int("End Pending Count", len(w.pendingTransactions)).
+		Msg("Updated pending transactions")
 	return len(w.pendingTransactions), nil
 }
 
@@ -101,10 +103,10 @@ func (w *Wallet) PendingTransactions() []*TrackedTransaction {
 }
 
 // SendTransaction sends a transaction to the chain and tracks and re-sends it if it times out. Returns the transaction hash
-func (w *Wallet) SendTransaction(latestBlock *types.Block, to *common.Address, value *big.Int) (common.Hash, error) {
+func (w *Wallet) SendTransaction(latestBlock *types.Block, to *common.Address, value *big.Int) error {
 	gasUnits, baseFee, gasTipCapFloat, err := w.estimateGas(latestBlock, to)
 	if err != nil {
-		return common.Hash{}, err
+		return err
 	}
 	gasTipCap := new(big.Int)
 	gasTipCapFloat.Int(gasTipCap)
@@ -120,11 +122,15 @@ func (w *Wallet) SendTransaction(latestBlock *types.Block, to *common.Address, v
 		GasFeeCap: gasFeeCap,
 	})
 	if err != nil {
-		return common.Hash{}, err
+		return err
 	}
 	ttx := &TrackedTransaction{
 		Transaction: tx,
 		timeSent:    time.Now(),
+	}
+	err = w.client.SendTransaction(context.Background(), tx)
+	if err != nil {
+		return err
 	}
 
 	w.pendingMu.Lock()
@@ -139,7 +145,7 @@ func (w *Wallet) SendTransaction(latestBlock *types.Block, to *common.Address, v
 		Uint64("Value", value.Uint64()).
 		Str("To", to.Hex()).
 		Msg("Sending new transaction")
-	return tx.Hash(), w.client.SendTransaction(context.Background(), tx)
+	return nil
 }
 
 func (w *Wallet) reSendTx(latestBlock *types.Block, oldTx *TrackedTransaction) error {

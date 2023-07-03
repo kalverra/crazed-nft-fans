@@ -1,9 +1,10 @@
 package main
 
 import (
-	"time"
+	"math/big"
 
 	"github.com/kalverra/crazed-nft-fans/config"
+	"github.com/kalverra/crazed-nft-fans/convert"
 	"github.com/kalverra/crazed-nft-fans/fans"
 	"github.com/rs/zerolog/log"
 )
@@ -26,6 +27,12 @@ func main() {
 	if err = president.RecruitFans(5); err != nil {
 		log.Fatal().Err(err).Msg("Error recruiting fans")
 	}
+	err = president.FundFans(convert.EtherToWei(big.NewFloat(1)))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error funding fans")
+	}
 	president.ActivateFans()
-	time.Sleep(time.Second * 5)
+	for {
+
+	}
 }

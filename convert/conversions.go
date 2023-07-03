@@ -11,6 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+const ETH = 1000000000000000000
+
 // PrivateKeyToAddress is a handy converter for an ecdsa private key to a usable eth address
 func PrivateKeyToAddress(privateKey *ecdsa.PrivateKey) (*common.Address, error) {
 	publicKeyECDSA, ok := privateKey.Public().(*ecdsa.PublicKey)

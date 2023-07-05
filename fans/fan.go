@@ -3,134 +3,218 @@ package fans
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
+	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/kalverra/crazed-nft-fans/config"
 	"github.com/kalverra/crazed-nft-fans/convert"
 )
 
+type trackedTransaction struct {
+	tx       *types.Transaction
+	timeSent time.Time
+}
+
+var sendAmount = big.NewInt(42069)
+
 // Fan is an NFT fan that will search for NFTs
 type Fan struct {
-	ID          string
-	Name        string
-	Address     *common.Address
-	PrivateKey  *ecdsa.PrivateKey
-	CrazedLevel *config.CrazedLevel
+	Address    *common.Address
+	PrivateKey *ecdsa.PrivateKey
+	Flutter    *big.Float
 
-	wallet             *Wallet
-	client             *ethclient.Client
-	stopButton         chan struct{}
-	currentlySearching bool
-	searchingMu        sync.Mutex
-	blockChan          chan *types.Block
+	balance             *big.Int
+	pendingNonce        uint64
+	trackedTransactions map[common.Hash]trackedTransaction
+	trackedMu           sync.RWMutex
+	client              *ethclient.Client
 }
 
-// New creates a new fan at a supplied crazed level
-func New(client *ethclient.Client, level *config.CrazedLevel) (*Fan, error) {
-	privateKey, err := crypto.GenerateKey()
+// New creates a new fan
+func New(client *ethclient.Client) (*Fan, error) {
+	key, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
-	addr := crypto.PubkeyToAddress(privateKey.PublicKey)
-	fan := &Fan{
-		ID:          xid.New().String(),
-		Name:        generateName(),
-		Address:     &addr,
-		PrivateKey:  privateKey,
-		CrazedLevel: level,
-
-		client:             client,
-		stopButton:         make(chan struct{}),
-		currentlySearching: false,
-		blockChan:          make(chan *types.Block),
-	}
-	fan.wallet, err = LoadWallet(privateKey, fan.ID, fan.Name, client, level)
+	addr, err := convert.PrivateKeyToAddress(key)
 	if err != nil {
 		return nil, err
 	}
-	return fan, nil
+	nonce, err := client.PendingNonceAt(context.Background(), *addr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Fan{
+		Address:    addr,
+		PrivateKey: key,
+		Flutter:    big.NewFloat(1.1),
+
+		balance:             big.NewInt(0),
+		pendingNonce:        nonce,
+		trackedTransactions: map[common.Hash]trackedTransaction{},
+		client:              client,
+	}, nil
 }
 
-// Search begins the fan's search
-func (f *Fan) Search() {
-	f.searchingMu.Lock()
-	defer f.searchingMu.Unlock()
-	f.currentlySearching = true
-	log.Info().Str("ID", f.ID).Str("Name", f.Name).Msg("Fan Searching!")
-	go f.searchLoop()
+// ReceiveBlock receives a new block from the chain, and updates pending transactions accordingly
+func (f *Fan) ReceiveBlock(newBlock *types.Block) error {
+	f.trackedMu.Lock()
+	defer f.trackedMu.Unlock()
+	for _, tx := range newBlock.Transactions() {
+		if _, ok := f.trackedTransactions[tx.Hash()]; ok {
+			delete(f.trackedTransactions, tx.Hash())
+			log.Trace().Str("Hash", tx.Hash().Hex()).Msg("Confirmed transaction")
+		}
+	}
+	_, err := f.SendRandomTransaction(newBlock.BaseFee())
+	return err
 }
 
-// searchLoop is the main loop for the fan's search
-func (f *Fan) searchLoop() {
+func (f *Fan) SendRandomTransaction(baseFee *big.Int) (common.Hash, error) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Error generating key")
+		return common.Hash{}, err
+	}
+	addr, err := convert.PrivateKeyToAddress(key)
+	if err != nil {
+		log.Error().Err(err).Msg("Error generating address")
+		return common.Hash{}, err
+	}
+	gasTipCap, gasFeeCap, err := f.calculateGas(baseFee)
+	if err != nil {
+		log.Error().Err(err).Msg("Error calculating gas")
+		return common.Hash{}, err
+	}
+	if gasFeeCap.Cmp(f.balance) >= 0 {
+		return common.Hash{}, fmt.Errorf("not enough balance to send transaction")
+	}
+	f.balance.Sub(f.balance, gasFeeCap)
+	f.balance.Sub(f.balance, sendAmount)
+	tx, err := types.SignNewTx(f.PrivateKey, types.LatestSignerForChainID(config.Current.BigChainID), &types.DynamicFeeTx{
+		ChainID:   config.Current.BigChainID,
+		Nonce:     f.pendingNonce,
+		To:        addr,
+		Value:     sendAmount,
+		Gas:       21_000,
+		GasTipCap: gasTipCap,
+		GasFeeCap: gasFeeCap,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Error signing transaction")
+		return common.Hash{}, err
+	}
+	f.pendingNonce++
+	err = f.client.SendTransaction(context.Background(), tx)
+	if err != nil {
+		log.Error().Err(err).
+			Str("Hash", tx.Hash().Hex()).
+			Uint64("Gas Tip Cap", gasTipCap.Uint64()).
+			Uint64("Base Fee", baseFee.Uint64()).
+			Msg("Error sending transaction")
+		return common.Hash{}, err
+	}
+	f.trackedTransactions[tx.Hash()] = trackedTransaction{
+		tx:       tx,
+		timeSent: time.Now(),
+	}
+	log.Trace().
+		Str("Hash", tx.Hash().Hex()).
+		Uint64("Gas Tip Cap", gasTipCap.Uint64()).
+		Uint64("Base Fee", baseFee.Uint64()).
+		Msg("Sent transaction")
+	return tx.Hash(), nil
+}
+
+// gasTipCap = floorPrice + floor(Flutter * random, peak)
+func (f *Fan) calculateGas(baseFee *big.Int) (gasTipCap, gasFeeCap *big.Int, err error) {
+	limitGasBig := big.NewInt(0).Sub(config.Current.PeakGasPriceWei, config.Current.FloorGasPriceWei)
+	random, err := rand.Int(rand.Reader, limitGasBig)
+	if err != nil {
+		return nil, nil, err
+	}
+	randFloat := big.NewFloat(0).SetInt(random)
+
+	uncertaintyFloat := big.NewFloat(0).Mul(f.Flutter, randFloat)
+	gasTipCap, _ = uncertaintyFloat.Int(nil)
+	gasTipCap.Add(gasTipCap, config.Current.FloorGasPriceWei)
+
+	gasFeeCap = big.NewInt(0).Add(baseFee, gasTipCap)
+	return gasTipCap, gasFeeCap, nil
+}
+
+func (f *Fan) Fund(wei *big.Int, fundingNonce uint64, timeout time.Duration) error {
+	latestHeader, err := f.client.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	baseFee := new(big.Int).Mul(latestHeader.BaseFee, big.NewInt(2))
+	tipCap, err := f.client.SuggestGasTipCap(context.Background())
+	if err != nil {
+		return err
+	}
+	gasFeeCap := big.NewInt(0).Add(baseFee, tipCap)
+	tx, err := types.SignNewTx(config.Current.FundingPrivateKey, types.LatestSignerForChainID(config.Current.BigChainID), &types.DynamicFeeTx{
+		ChainID:   config.Current.BigChainID,
+		Nonce:     fundingNonce,
+		To:        f.Address,
+		Value:     wei,
+		Gas:       21_000,
+		GasTipCap: tipCap,
+		GasFeeCap: gasFeeCap,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = f.client.SendTransaction(context.Background(), tx)
+	if err != nil {
+		return err
+	}
+	log.Trace().Str("Hash", tx.Hash().Hex()).Uint64("Nonce", fundingNonce).Uint64("Wei", wei.Uint64()).Msg("Funding fan")
+	f.trackedTransactions[tx.Hash()] = trackedTransaction{
+		tx:       tx,
+		timeSent: time.Now(),
+	}
+	if err = f.ConfirmTransaction(tx.Hash(), timeout); err != nil {
+		return err
+	}
+	f.balance.Add(f.balance, wei)
+	return nil
+}
+
+func (f *Fan) ConfirmTransaction(txHash common.Hash, timeout time.Duration) error {
+	f.trackedMu.RLock()
+	if _, ok := f.trackedTransactions[txHash]; !ok {
+		return fmt.Errorf("transaction %s not found", txHash.Hex())
+	}
+	f.trackedMu.RUnlock()
+
+	timeoutC := time.After(timeout)
+	check := time.NewTicker(500 * time.Millisecond)
+	defer check.Stop()
 	for {
 		select {
-		case <-f.stopButton:
-			f.searchingMu.Lock()
-			log.Info().Str("ID", f.ID).Str("Name", f.Name).Msg("Stopping fan")
-			f.currentlySearching = false
-			f.searchingMu.Unlock()
-			return
-		case newBlock := <-f.blockChan:
-			stillPendingCount, err := f.wallet.UpdatePendingTxs(newBlock)
-			if err != nil {
-				log.Error().Err(err).Str("Fan", f.Name).Str("ID", f.ID).Msg("Error updating pending transactions")
-				continue
-			}
-			if stillPendingCount < f.CrazedLevel.MaxPendingTransactions {
-				randomKey, err := crypto.GenerateKey()
-				if err != nil {
-					log.Error().Err(err).Msg("Error generating new private key")
-					continue
-				}
-				randomAddr, err := convert.PrivateKeyToAddress(randomKey)
-				if err != nil {
-					log.Error().Err(err).Msg("Error generating new address")
-					continue
-				}
-				err = f.wallet.SendTransaction(newBlock, randomAddr, big.NewInt(42069))
-				if err != nil {
-					bal, balErr := f.client.BalanceAt(context.Background(), *f.Address, nil)
-					if balErr != nil {
-						log.Error().Err(err).Str("Fan", f.Name).Str("ID", f.ID).Msg("Error getting balance after failing to send transaction")
-					} else {
-						log.Error().Err(err).
-							Str("From", f.Address.Hex()).
-							Str("Fan", f.Name).
-							Uint64("Balance", bal.Uint64()).
-							Str("ID", f.ID).
-							Msg("Error sending transaction")
-					}
-				}
+		case <-timeoutC:
+			return fmt.Errorf("error confirming tx %s after %s", txHash.Hex(), timeout)
+		case <-check.C:
+			f.trackedMu.RLock()
+			_, ok := f.trackedTransactions[txHash]
+			f.trackedMu.RUnlock()
+			if !ok {
+				log.Trace().Str("Hash", txHash.Hex()).Msg("Confirmed transaction")
+				return nil
 			}
 		}
 	}
-}
-
-// ReceiveBlock receives a new block from the chain, and acts according to the fan's intensity level
-func (f *Fan) ReceiveBlock(block *types.Block) {
-	if !f.IsSearching() {
-		return
-	}
-	f.blockChan <- block
-	log.Trace().Str("Fan ID", f.ID).Str("Crazed Level", f.CrazedLevel.Name).Str("Fan Name", f.Name).Msg("Received new header")
-}
-
-// Stop stops the fan's search
-func (f *Fan) Stop() {
-	f.stopButton <- struct{}{}
-}
-
-// IsSearching returns whether or not the fan is currently searching
-func (f *Fan) IsSearching() bool {
-	f.searchingMu.Lock()
-	defer f.searchingMu.Unlock()
-	return f.currentlySearching
 }

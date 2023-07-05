@@ -9,18 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/onsi/gomega"
 	"github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kalverra/crazed-nft-fans/config"
+	"github.com/kalverra/crazed-nft-fans/convert"
 	"github.com/kalverra/crazed-nft-fans/fans"
 )
-
-const fanCount = 5
 
 func TestMain(m *testing.M) {
 	err := config.ReadConfig()
@@ -30,141 +26,33 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestNewFan(t *testing.T) {
-	t.Parallel()
-
+func TestTransaction(t *testing.T) {
 	client, err := ethclient.Dial(config.Current.WS)
 	require.NoError(t, err, "Error dialing client")
-	fan, err := fans.New(client, config.Manic)
-	require.NoError(t, err, "Error creating new fan")
-	require.NotNil(t, fan, "Fan should not be nil")
-}
+	fan, err := fans.New(client)
+	require.NoError(t, err, "Error creating fan")
+	pendingNonce, err := client.PendingNonceAt(context.Background(), config.Current.FundingAddress)
+	require.NoError(t, err, "Error getting pending nonce")
+	err = fan.Fund(convert.EtherToWei(big.NewFloat(0.1)), pendingNonce, time.Second*10)
+	require.NoError(t, err, "Error funding fan")
 
-func TestRecruit(t *testing.T) {
-	t.Parallel()
+	header, err := client.HeaderByNumber(context.Background(), nil)
+	hash, err := fan.SendRandomTransaction(header.BaseFee)
+	require.NoError(t, err, "Error sending random transaction")
 
-	president, err := fans.NewPresident()
-	require.NoError(t, err, "Error creating new president")
-	err = president.RecruitFans(5)
-	require.NoError(t, err, "Error recruiting fans")
-}
-
-func setupPresident(t *testing.T) *fans.President {
-	president, err := fans.NewPresident()
-	require.NoError(t, err, "Error creating new president")
-	require.NotNil(t, president, "President should not be nil")
-	err = president.RecruitFans(fanCount)
-	require.NoError(t, err, "Error recruiting fans")
-	return president
-}
-
-func TestSearch(t *testing.T) {
-	president := setupPresident(t)
-	president.ActivateFans()
-	fansSearching, _ := countFansStatus(t, president)
-	require.GreaterOrEqual(t, fansSearching, fanCount, "Expected at least %d fans to be searching", fanCount)
-}
-
-func TestStop(t *testing.T) {
-	t.Parallel()
-
-	president := setupPresident(t)
-	president.ActivateFans()
-	president.StopFans()
-	time.Sleep(100 * time.Millisecond)
-	fansSearching, fansStopped := countFansStatus(t, president)
-	require.GreaterOrEqual(t, fansStopped, fanCount, "Expected at least %d fans to be stopped, found %d searching", fanCount, fansSearching)
-}
-
-func TestActivationTimeSpan(t *testing.T) {
-	t.Parallel()
-
-	expectedDuration, failureDuration := time.Second, 2*time.Second
-	president := setupPresident(t)
-	startTime := time.Now()
-	president.ActivateFansTimeSpan(expectedDuration)
-	fansSearching, fansStopped := countFansStatus(t, president)
-	assert.GreaterOrEqual(t, fansSearching, fanCount,
-		"Expected at least %d fans to be searching, found %d stopped", fanCount, fansStopped,
-	)
-
-	for range time.Tick(time.Millisecond * 50) {
-		fansSearching, fansStopped = countFansStatus(t, president)
-		if fansStopped == fanCount || time.Since(startTime) >= failureDuration {
-			break
-		}
-	}
-	require.GreaterOrEqual(t, time.Since(startTime), expectedDuration,
-		"Expected fans to stop searching after at least %s, but they're still going after %s", failureDuration, time.Since(startTime),
-	)
-	require.Less(t, time.Since(startTime), failureDuration,
-		"Expected fans to stop searching after at least %s, but they're still going after %s", failureDuration, time.Since(startTime),
-	)
-}
-
-func TestActivateBlockSpan(t *testing.T) {
-	t.Parallel()
-
-	president := setupPresident(t)
-	newHeaders := make(chan *types.Header)
-	blocksSeen, expectedBlocks, maxBlocks := 0, 1, 5
-	blockSub, err := president.Client.SubscribeNewHead(context.Background(), newHeaders)
-	require.NoError(t, err, "Error subscribing to new blocks")
-	president.ActivateFansBlockSpan(expectedBlocks)
-
-testLoop:
+	// Wait for transaction to be mined
+	check, timeout := time.NewTicker(time.Millisecond*500), time.After(time.Second*10)
+	defer check.Stop()
 	for {
 		select {
-		case <-time.After(5 * time.Second):
-			require.Fail(t, "Timed out waiting for new blocks")
-		case err := <-blockSub.Err():
-			require.NoError(t, err, "Error subscribing to new blocks")
-		case <-newHeaders:
-			blocksSeen++
-			_, fansStopped := countFansStatus(t, president)
-			if fansStopped == fanCount {
-				break testLoop
+		case <-check.C:
+			receipt, err := client.TransactionReceipt(context.Background(), hash)
+			require.NoError(t, err, "Error getting transaction receipt")
+			if receipt.Status == 1 {
+				return
 			}
-			if blocksSeen >= maxBlocks {
-				break testLoop
-			}
+		case <-timeout:
+			require.Fail(t, "Transaction timed out")
 		}
 	}
-	require.GreaterOrEqual(t, blocksSeen, 2, "Expected to see at least %d blocks before fans stopped, but saw %d", 2, blocksSeen)
-	require.Less(t, blocksSeen, maxBlocks, "Expected to see less than %d blocks before fans stopped, but saw %d", maxBlocks, blocksSeen)
-}
-
-func TestFunding(t *testing.T) {
-	t.Parallel()
-
-	president := setupPresident(t)
-	err := president.FundFans(big.NewInt(42069))
-	require.NoError(t, err, "Error funding fans")
-
-	client, err := ethclient.Dial(config.Current.WS)
-	require.NoError(t, err, "Error dialing client")
-
-	gom := gomega.NewGomegaWithT(t)
-	gom.Eventually(func(g gomega.Gomega) {
-		for _, fan := range president.Fans() {
-			balance, err := client.BalanceAt(context.Background(), *fan.Address, nil)
-			g.Expect(err).To(gomega.BeNil())
-			g.Expect(big.NewInt(42069).Cmp(balance)).To(gomega.BeNumerically(">=", 0))
-		}
-	}, "10s", "1s").Should(gomega.Succeed())
-
-	president.ActivateFans()
-	time.Sleep(5 * time.Minute)
-}
-
-func countFansStatus(t *testing.T, president *fans.President) (fansSearching int, fansStopped int) {
-	t.Helper()
-	for _, fan := range president.Fans() {
-		if fan.IsSearching() {
-			fansSearching++
-		} else {
-			fansStopped++
-		}
-	}
-	return
 }

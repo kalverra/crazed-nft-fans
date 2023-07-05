@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Crazed NFT Fans</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <canvas id="myChart"></canvas>
+  <script>
+    // JavaScript code to create and update the chart
+    var ctx = document.getElementById('myChart').getContext('2d');
+    var chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'Gas Price',
+          data: [],
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            title: {
+              display: true,
+              text: 'Gas Price (Gwei)'
+            },
+            beginAtZero: false,
+            ticks: {
+              callback: function (value, index, ticks) {
+                return value / 1000000000;
+              }
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Block Number'
+            },
+          }
+        }
+      }
+    });
+
+    function updateChart() {
+      fetch('/blockData')
+        .then(response => response.json())
+        .then(data => {
+          // Extract the "hash" and "number" values from the objects in the array
+          const numbers = data.map(obj => obj.number);
+          const gas = data.map(obj => obj.gasPrice);
+
+          // Update the chart with the extracted data
+          chart.data.labels = numbers;
+          chart.data.datasets[0].data = gas;
+          chart.update();
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    }
+
+    // Call the updateChart function every 3 seconds
+    setInterval(updateChart, 1000);
+  </script>
+</body>
+
+</html>

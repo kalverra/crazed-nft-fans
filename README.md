@@ -25,17 +25,15 @@ HTTP_URL="http://localhost:8545" # HTTP URL of the chain to run on
 WS_URL="ws://localhost:8546" # WS URL of the chain to run on
 CHAIN_ID="1337" # ID of the chain to run on
 FUNDING_KEY="ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" # Private key of the funding address
-CRAZED_LEVEL="0" # See below
+TARGET_GAS_PRICE="1000000000" # Gas price to target (in Gwei) as the peak on chain price.
 ```
 
-### Crazed Levels
+## Run
 
-You can set how intensely the fans will interact with the chain using the `CRAZED_LEVEL` env var. This controls how high fans will set their gas tips, and how often they decide to replace transactions with higher gas tips.
 
-```sh
-# Valid crazed levels, in ascending order of intensity
-CRAZED_LEVEL= Indifferent | Curious | Interested | Obsessed | Manic | Mixed # Mixed will randomize fans to different levels
-```
+## Emulating a Network Congestion Event
+
+This is the tricky bit, you can't 
 
 ## Test
 

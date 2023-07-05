@@ -77,8 +77,5 @@ build:
 run:
 	go run ./main
 
-run_auto:
-	go run ./main -autoStart=true
-
 docker_build:
 	docker build . -t kalverra/crazed-nft-fans

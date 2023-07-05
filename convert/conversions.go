@@ -59,3 +59,11 @@ func WeiToGwei(wei *big.Int) *big.Float {
 	floatGWei := big.NewFloat(params.GWei)
 	return new(big.Float).Quo(floatWei, floatGWei)
 }
+
+// GweiToWei converts GWei amounts to Wei
+func GweiToWei(gwei *big.Float) *big.Int {
+	floatWei := new(big.Float).SetInt(big.NewInt(params.GWei))
+	floatWei.Mul(floatWei, gwei)
+	wei, _ := floatWei.Int(nil)
+	return wei
+}

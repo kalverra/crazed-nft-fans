@@ -35,8 +35,10 @@ var (
 	fundingNonceMu sync.Mutex
 	fundingNonce   uint64
 
-	TargetGasPrice    = big.NewInt(35000000000) // 35 gwei, a common baseline
-	gasPriceIncrement = big.NewInt(1000000000)  // 1 gwei
+	previousTargetGasPrice = big.NewInt(35000000000)
+	TargetGasPrice         = big.NewInt(35000000000) // 35 gwei, a common baseline
+	gasPriceIncrement      = big.NewInt(1000000000)  // 1 gwei
+	tempSpiked             = false
 )
 
 func WatchChain() error {
@@ -74,10 +76,13 @@ func WatchChain() error {
 					continue
 				}
 				percentBlockFilled := (float64(header.GasUsed) / float64(header.GasLimit)) * 100
+				gp, _ := convert.WeiToGwei(gasPrice).Float64()
+				tp, _ := convert.WeiToGwei(TargetGasPrice).Float64()
 				log.Info().
 					Str("Hash", header.Hash().Hex()).
 					Uint64("Number", header.Number.Uint64()).
-					Uint64("Gas Price", gasPrice.Uint64()).
+					Float64("Gas Price", gp).
+					Float64("Target Gas Price", tp).
 					Uint64("Base Fee", header.BaseFee.Uint64()).
 					Uint64("Gas Limit", header.GasLimit).
 					Uint64("Gas Used", header.GasUsed).
@@ -114,6 +119,10 @@ func WatchChain() error {
 					} else {
 						log.Error().Err(err).Uint64("Header", header.Number.Uint64()).Msg("Error receiving block")
 					}
+				}
+				if tempSpiked {
+					SetGasTarget(previousTargetGasPrice)
+					tempSpiked = false
 				}
 			}
 		}
@@ -197,6 +206,7 @@ func FundingNonce() uint64 {
 }
 
 func SetGasTarget(gasPrice *big.Int) {
+	previousTargetGasPrice = TargetGasPrice
 	TargetGasPrice = gasPrice
 }
 
@@ -212,8 +222,19 @@ func DecreaseGasTarget() *big.Int {
 	return newLevel
 }
 
-func Spike() *big.Int {
-	log.Info().Msg("Spiking Gas Price")
+func TempSpike() *big.Int {
+	newLevel := big.NewInt(0).Mul(TargetGasPrice, big.NewInt(100))
+	SetGasTarget(newLevel)
+	log.Info().
+		Uint64("New Level", newLevel.Uint64()).
+		Uint64("Old Level", TargetGasPrice.Uint64()).
+		Msg("Temporarily Spiking Gas Price")
+	tempSpiked = true
+	return newLevel
+}
+
+func PermanentSpike() *big.Int {
+	log.Info().Msg("Permanently Spiking Gas Price")
 	newLevel := big.NewInt(0).Mul(TargetGasPrice, big.NewInt(100))
 	SetGasTarget(newLevel)
 	return newLevel

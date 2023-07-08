@@ -88,7 +88,7 @@ func decreaseIntensity(w http.ResponseWriter, r *http.Request) {
 }
 
 func spike(w http.ResponseWriter, r *http.Request) {
-	newTarget := president.Spike()
+	newTarget := president.TempSpike()
 	_, err := w.Write([]byte(convert.WeiToGwei(newTarget).String()))
 	if err != nil {
 		log.Error().Err(err).Msg("Error writing response")

@@ -35,8 +35,8 @@ var (
 	fundingNonceMu sync.Mutex
 	fundingNonce   uint64
 
-	IntensityLevel = big.NewFloat(1)
-	IntensityDelta = big.NewFloat(1)
+	TargetGasPrice    = big.NewInt(35000000000) // 35 gwei, a common baseline
+	gasPriceIncrement = big.NewInt(1000000000)  // 1 gwei
 )
 
 func WatchChain() error {
@@ -99,7 +99,7 @@ func WatchChain() error {
 				for _, f := range fanClub {
 					fan := f
 					eg.Go(func() error {
-						return fan.ReceiveBlock(block)
+						return fan.ReceiveBlock(block, TargetGasPrice)
 					})
 				}
 				if err = eg.Wait(); err != nil {
@@ -178,7 +178,7 @@ func FundFans(wei *big.Int) error {
 
 func RecruitFans(count int) error {
 	for i := 0; i < count; i++ {
-		fan, err := fans.New(client, IntensityLevel)
+		fan, err := fans.New(client)
 		if err != nil {
 			return err
 		}
@@ -196,24 +196,25 @@ func FundingNonce() uint64 {
 	return n
 }
 
-func SetIntensity(newLevel *big.Float) {
-	newLevelLog, _ := newLevel.Float64()
-	oldLevelLog, _ := IntensityLevel.Float64()
-	log.Debug().Float64("Old", oldLevelLog).Float64("New", newLevelLog).Msg("Setting intensity")
-	IntensityLevel = newLevel
-	for _, f := range fanClub {
-		f.Intensity = newLevel
-	}
+func SetGasTarget(gasPrice *big.Int) {
+	TargetGasPrice = gasPrice
 }
 
-func IncreaseIntensity() *big.Float {
-	newLevel := new(big.Float).Add(IntensityLevel, IntensityDelta)
-	SetIntensity(newLevel)
+func IncreaseGasTarget() *big.Int {
+	newLevel := big.NewInt(0).Add(TargetGasPrice, gasPriceIncrement)
+	SetGasTarget(newLevel)
 	return newLevel
 }
 
-func DecreaseIntensity() *big.Float {
-	newLevel := new(big.Float).Sub(IntensityLevel, IntensityDelta)
-	SetIntensity(newLevel)
+func DecreaseGasTarget() *big.Int {
+	newLevel := big.NewInt(0).Sub(TargetGasPrice, gasPriceIncrement)
+	SetGasTarget(newLevel)
+	return newLevel
+}
+
+func Spike() *big.Int {
+	log.Info().Msg("Spiking Gas Price")
+	newLevel := big.NewInt(0).Mul(TargetGasPrice, big.NewInt(100))
+	SetGasTarget(newLevel)
 	return newLevel
 }

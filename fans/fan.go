@@ -29,9 +29,9 @@ var sendAmount = big.NewInt(42069)
 
 // Fan is an NFT fan that will search for NFTs
 type Fan struct {
-	Address    *common.Address
-	PrivateKey *ecdsa.PrivateKey
-	Intensity  *big.Float
+	Address        *common.Address
+	PrivateKey     *ecdsa.PrivateKey
+	TargetGasPrice *big.Int
 
 	funded              bool
 	balance             *big.Int
@@ -42,7 +42,7 @@ type Fan struct {
 }
 
 // New creates a new fan
-func New(client *ethclient.Client, intensity *big.Float) (*Fan, error) {
+func New(client *ethclient.Client) (*Fan, error) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
@@ -57,9 +57,9 @@ func New(client *ethclient.Client, intensity *big.Float) (*Fan, error) {
 	}
 
 	return &Fan{
-		Address:    addr,
-		PrivateKey: key,
-		Intensity:  intensity,
+		Address:        addr,
+		PrivateKey:     key,
+		TargetGasPrice: big.NewInt(35000000000), // 35 gwei, a common baseline
 
 		funded:              false,
 		balance:             big.NewInt(0),
@@ -70,7 +70,8 @@ func New(client *ethclient.Client, intensity *big.Float) (*Fan, error) {
 }
 
 // ReceiveBlock receives a new block from the chain, and updates pending transactions accordingly
-func (f *Fan) ReceiveBlock(newBlock *types.Block) error {
+func (f *Fan) ReceiveBlock(newBlock *types.Block, targetGasPrice *big.Int) error {
+	f.TargetGasPrice = targetGasPrice
 	f.trackedMu.Lock()
 	defer f.trackedMu.Unlock()
 	for _, tx := range newBlock.Transactions() {
@@ -80,9 +81,7 @@ func (f *Fan) ReceiveBlock(newBlock *types.Block) error {
 		}
 	}
 	if f.funded {
-		intensityBig, _ := f.Intensity.Int(nil)
-		intensityInt := int(intensityBig.Int64()) + 1 // Make sure we send at least 1 transaction
-		for i := 0; i < rand.Intn(intensityInt); i++ {
+		for i := 0; i < rand.Intn(20); i++ {
 			_, err := f.SendRandomTransaction(newBlock.BaseFee())
 			if err != nil {
 				return err
@@ -148,16 +147,12 @@ func (f *Fan) SendRandomTransaction(baseFee *big.Int) (common.Hash, error) {
 
 // gasTipCap = floorPrice + floor(Flutter * random, peak)
 func (f *Fan) calculateGas(baseFee *big.Int) (gasTipCap, gasFeeCap *big.Int, err error) {
-	limitGasBig := big.NewInt(0).Sub(config.Current.PeakGasPriceWei, config.Current.FloorGasPriceWei)
-	random, err := bigrand.Int(bigrand.Reader, limitGasBig)
+	lowerBound, upperBound := big.NewInt(0).Quo(f.TargetGasPrice, big.NewInt(2)), big.NewInt(0).Mul(f.TargetGasPrice, big.NewInt(2))
+	gasTipCap, err = bigrand.Int(bigrand.Reader, upperBound)
 	if err != nil {
 		return nil, nil, err
 	}
-	randFloat := big.NewFloat(0).SetInt(random)
-
-	uncertaintyFloat := big.NewFloat(0).Mul(f.Intensity, randFloat)
-	gasTipCap, _ = uncertaintyFloat.Int(nil)
-	gasTipCap.Add(gasTipCap, config.Current.FloorGasPriceWei)
+	gasTipCap.Add(gasTipCap, lowerBound)
 
 	gasFeeCap = big.NewInt(0).Add(baseFee, gasTipCap)
 	return gasTipCap, gasFeeCap, nil
@@ -229,8 +224,4 @@ func (f *Fan) ConfirmTransaction(txHash common.Hash, timeout time.Duration) erro
 			}
 		}
 	}
-}
-
-func (f *Fan) SetIntensity(intensity *big.Float) {
-	f.Intensity = intensity
 }

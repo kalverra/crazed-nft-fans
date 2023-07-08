@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/kalverra/crazed-nft-fans/convert"
 	"github.com/kalverra/crazed-nft-fans/president"
 )
 
@@ -24,6 +25,7 @@ func buildRoutes() *http.Server {
 	r.Get("/blockData", blockData)
 	r.Put("/increaseIntensity", increaseIntensity)
 	r.Put("/decreaseIntensity", decreaseIntensity)
+	r.Put("/spike", spike)
 
 	return &http.Server{
 		Addr:         ":3333",
@@ -66,9 +68,9 @@ func blockData(w http.ResponseWriter, r *http.Request) {
 
 // TODO: could clean this up
 func increaseIntensity(w http.ResponseWriter, r *http.Request) {
-	newLevel := president.IncreaseIntensity()
+	newTarget := president.IncreaseGasTarget()
 	w.Header().Set("Content-Type", "application/json")
-	_, err := w.Write([]byte(newLevel.String()))
+	_, err := w.Write([]byte(convert.WeiToGwei(newTarget).String()))
 	if err != nil {
 		log.Error().Err(err).Msg("Error writing response")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -76,9 +78,18 @@ func increaseIntensity(w http.ResponseWriter, r *http.Request) {
 }
 
 func decreaseIntensity(w http.ResponseWriter, r *http.Request) {
-	newLevel := president.DecreaseIntensity()
+	newTarget := president.DecreaseGasTarget()
 	w.Header().Set("Content-Type", "application/json")
-	_, err := w.Write([]byte(newLevel.String()))
+	_, err := w.Write([]byte(convert.WeiToGwei(newTarget).String()))
+	if err != nil {
+		log.Error().Err(err).Msg("Error writing response")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func spike(w http.ResponseWriter, r *http.Request) {
+	newTarget := president.Spike()
+	_, err := w.Write([]byte(convert.WeiToGwei(newTarget).String()))
 	if err != nil {
 		log.Error().Err(err).Msg("Error writing response")
 		w.WriteHeader(http.StatusInternalServerError)

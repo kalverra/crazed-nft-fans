@@ -9,10 +9,11 @@
 <body>
   <h1>Crazed NFT Fans</h1>
   <div>
-    Intensity Level:
+    Target Gas Price:
     <button id="increaseButton" onclick="increaseIntensity()">Increase</button>
-    <div style="display: inline;" id="intensityLevel">1.0</div>
+    <div style="display: inline;" id="intensityLevel">35</div> Gwei
     <button id="decreaseButton" onclick="decreaseIntensity()">Decrease</button>
+    <button id="Spike" onclick="spike()">Spike</button>
   </div>
   <br>
   <br>
@@ -104,6 +105,29 @@
 
     function decreaseIntensity() {
       fetch('/decreaseIntensity', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error('Error: ' + response.status);
+          }
+        })
+        .then(data => {
+          var resultElement = document.getElementById('intensityLevel');
+          resultElement.textContent = data;
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    }
+
+    function spike() {
+      fetch('/spike', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

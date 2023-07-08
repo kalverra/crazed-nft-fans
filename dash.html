@@ -7,10 +7,20 @@
 </head>
 
 <body>
-  <canvas id="myChart"></canvas>
+  <h1>Crazed NFT Fans</h1>
+  <div>
+    Intensity Level:
+    <button id="increaseButton" onclick="increaseIntensity()">Increase</button>
+    <div style="display: inline;" id="intensityLevel">1.0</div>
+    <button id="decreaseButton" onclick="decreaseIntensity()">Decrease</button>
+  </div>
+  <br>
+  <br>
+
+  <canvas id="gasPriceChart"></canvas>
   <script>
-    // JavaScript code to create and update the chart
-    var ctx = document.getElementById('myChart').getContext('2d');
+    // init chart
+    var ctx = document.getElementById('gasPriceChart').getContext('2d');
     var chart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -33,7 +43,7 @@
             beginAtZero: false,
             ticks: {
               callback: function (value, index, ticks) {
-                return value / 1000000000;
+                return value / 1000000000; // scale Wei to Gwei
               }
             }
           },
@@ -65,8 +75,55 @@
         });
     }
 
-    // Call the updateChart function every 3 seconds
+    // Call the updateChart function every second
     setInterval(updateChart, 1000);
+
+    function increaseIntensity() {
+      fetch('/increaseIntensity', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+
+      })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error('Error: ' + response.status);
+          }
+        })
+        .then(data => {
+          var resultElement = document.getElementById('intensityLevel');
+          resultElement.textContent = data;
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    }
+
+    function decreaseIntensity() {
+      fetch('/decreaseIntensity', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error('Error: ' + response.status);
+          }
+        })
+        .then(data => {
+          var resultElement = document.getElementById('intensityLevel');
+          resultElement.textContent = data;
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    }
   </script>
 </body>
 

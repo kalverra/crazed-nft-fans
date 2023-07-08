@@ -25,3 +25,6 @@ go.work
 .env
 testdata/
 dist/
+
+# Python virtual env
+analysis/venv/

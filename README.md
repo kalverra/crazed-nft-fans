@@ -30,10 +30,25 @@ TARGET_GAS_PRICE="1000000000" # Gas price to target (in Gwei) as the peak on cha
 
 ## Run
 
+You need a simulated network to run on, like [geth in dev mode](https://geth.ethereum.org/docs/getting-started/dev-mode). You can run one quickly with:
+
+```sh
+make start_test_node
+```
+
+which will give you a geth node running on `localhost:8545` and `localhost:8546` with the chain ID `1337`.
+
+Then, you can run the crazed fans with:
+
+```sh
+go run .
+```
+
+and see the live dashboard at `http://localhost:3333`.
 
 ## Emulating a Network Congestion Event
 
-This is the tricky bit, you can't 
+This is the tricky bit. Gas is ultimately a market, and the price can be determined by a million factors, plus good old luck. I've done my best to find some general trends and emulate them to the best of my ability. I'm a fairly amateur data-scientist, but you can check out [my efforts](./analysis/).   I'm also looking at replicating certain notable events (e.g. crypto kitties launch) closely as possible.
 
 ## Test
 

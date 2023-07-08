@@ -3,9 +3,10 @@ package fans
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/rand"
+	bigrand "crypto/rand"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -30,8 +31,9 @@ var sendAmount = big.NewInt(42069)
 type Fan struct {
 	Address    *common.Address
 	PrivateKey *ecdsa.PrivateKey
-	Flutter    *big.Float
+	Intensity  *big.Float
 
+	funded              bool
 	balance             *big.Int
 	pendingNonce        uint64
 	trackedTransactions map[common.Hash]trackedTransaction
@@ -40,7 +42,7 @@ type Fan struct {
 }
 
 // New creates a new fan
-func New(client *ethclient.Client) (*Fan, error) {
+func New(client *ethclient.Client, intensity *big.Float) (*Fan, error) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
@@ -57,8 +59,9 @@ func New(client *ethclient.Client) (*Fan, error) {
 	return &Fan{
 		Address:    addr,
 		PrivateKey: key,
-		Flutter:    big.NewFloat(1.1),
+		Intensity:  intensity,
 
+		funded:              false,
 		balance:             big.NewInt(0),
 		pendingNonce:        nonce,
 		trackedTransactions: map[common.Hash]trackedTransaction{},
@@ -76,8 +79,18 @@ func (f *Fan) ReceiveBlock(newBlock *types.Block) error {
 			log.Trace().Str("Hash", tx.Hash().Hex()).Msg("Confirmed transaction")
 		}
 	}
-	_, err := f.SendRandomTransaction(newBlock.BaseFee())
-	return err
+	if f.funded {
+		intensityBig, _ := f.Intensity.Int(nil)
+		intensityInt := int(intensityBig.Int64()) + 1 // Make sure we send at least 1 transaction
+		for i := 0; i < rand.Intn(intensityInt); i++ {
+			_, err := f.SendRandomTransaction(newBlock.BaseFee())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (f *Fan) SendRandomTransaction(baseFee *big.Int) (common.Hash, error) {
@@ -96,7 +109,9 @@ func (f *Fan) SendRandomTransaction(baseFee *big.Int) (common.Hash, error) {
 		log.Error().Err(err).Msg("Error calculating gas")
 		return common.Hash{}, err
 	}
-	if gasFeeCap.Cmp(f.balance) >= 0 {
+	totalGasCost := big.NewInt(0).Mul(gasFeeCap, big.NewInt(21_000))
+	if totalGasCost.Cmp(f.balance) >= 0 {
+		f.funded = false
 		return common.Hash{}, fmt.Errorf("not enough balance to send transaction")
 	}
 	f.balance.Sub(f.balance, gasFeeCap)
@@ -117,11 +132,6 @@ func (f *Fan) SendRandomTransaction(baseFee *big.Int) (common.Hash, error) {
 	f.pendingNonce++
 	err = f.client.SendTransaction(context.Background(), tx)
 	if err != nil {
-		log.Error().Err(err).
-			Str("Hash", tx.Hash().Hex()).
-			Uint64("Gas Tip Cap", gasTipCap.Uint64()).
-			Uint64("Base Fee", baseFee.Uint64()).
-			Msg("Error sending transaction")
 		return common.Hash{}, err
 	}
 	f.trackedTransactions[tx.Hash()] = trackedTransaction{
@@ -139,13 +149,13 @@ func (f *Fan) SendRandomTransaction(baseFee *big.Int) (common.Hash, error) {
 // gasTipCap = floorPrice + floor(Flutter * random, peak)
 func (f *Fan) calculateGas(baseFee *big.Int) (gasTipCap, gasFeeCap *big.Int, err error) {
 	limitGasBig := big.NewInt(0).Sub(config.Current.PeakGasPriceWei, config.Current.FloorGasPriceWei)
-	random, err := rand.Int(rand.Reader, limitGasBig)
+	random, err := bigrand.Int(bigrand.Reader, limitGasBig)
 	if err != nil {
 		return nil, nil, err
 	}
 	randFloat := big.NewFloat(0).SetInt(random)
 
-	uncertaintyFloat := big.NewFloat(0).Mul(f.Flutter, randFloat)
+	uncertaintyFloat := big.NewFloat(0).Mul(f.Intensity, randFloat)
 	gasTipCap, _ = uncertaintyFloat.Int(nil)
 	gasTipCap.Add(gasTipCap, config.Current.FloorGasPriceWei)
 
@@ -186,10 +196,12 @@ func (f *Fan) Fund(wei *big.Int, fundingNonce uint64, timeout time.Duration) err
 		tx:       tx,
 		timeSent: time.Now(),
 	}
-	if err = f.ConfirmTransaction(tx.Hash(), timeout); err != nil {
+	err = f.ConfirmTransaction(tx.Hash(), timeout)
+	if err != nil {
 		return err
 	}
 	f.balance.Add(f.balance, wei)
+	f.funded = true
 	return nil
 }
 
@@ -217,4 +229,8 @@ func (f *Fan) ConfirmTransaction(txHash common.Hash, timeout time.Duration) erro
 			}
 		}
 	}
+}
+
+func (f *Fan) SetIntensity(intensity *big.Float) {
+	f.Intensity = intensity
 }

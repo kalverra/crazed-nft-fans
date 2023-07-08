@@ -2,7 +2,9 @@ package president
 
 import (
 	"context"
+	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/kalverra/crazed-nft-fans/config"
+	"github.com/kalverra/crazed-nft-fans/convert"
 	"github.com/kalverra/crazed-nft-fans/fans"
 )
 
@@ -23,12 +26,17 @@ type TrackedBlock struct {
 }
 
 var (
-	trackedMu      sync.RWMutex
-	trackedBlocks  = map[uint64]*TrackedBlock{}
-	fanClub        = []*fans.Fan{}
-	client         *ethclient.Client
+	fanClub = []*fans.Fan{}
+	client  *ethclient.Client
+
+	trackedMu     sync.RWMutex
+	trackedBlocks = map[uint64]*TrackedBlock{}
+
 	fundingNonceMu sync.Mutex
 	fundingNonce   uint64
+
+	IntensityLevel = big.NewFloat(1)
+	IntensityDelta = big.NewFloat(1)
 )
 
 func WatchChain() error {
@@ -65,6 +73,7 @@ func WatchChain() error {
 					log.Error().Err(err).Uint64("Header", header.Number.Uint64()).Msg("Error getting gas price")
 					continue
 				}
+				percentBlockFilled := (float64(header.GasUsed) / float64(header.GasLimit)) * 100
 				log.Info().
 					Str("Hash", header.Hash().Hex()).
 					Uint64("Number", header.Number.Uint64()).
@@ -72,6 +81,7 @@ func WatchChain() error {
 					Uint64("Base Fee", header.BaseFee.Uint64()).
 					Uint64("Gas Limit", header.GasLimit).
 					Uint64("Gas Used", header.GasUsed).
+					Str("Percent Block Filled", fmt.Sprintf("%.2f%%", percentBlockFilled)).
 					Msg("New block")
 				trackedBlock := &TrackedBlock{
 					Hash:     header.Hash().String(),
@@ -93,7 +103,17 @@ func WatchChain() error {
 					})
 				}
 				if err = eg.Wait(); err != nil {
-					log.Error().Err(err).Uint64("Header", header.Number.Uint64()).Msg("Error receiving block")
+					if strings.Contains(err.Error(), "insufficient funds") {
+						log.Warn().Msg("Fans out of money, deploying capital!")
+						go func() {
+							err = FundFans(convert.EtherToWei(big.NewFloat(100)))
+							if err != nil {
+								log.Error().Err(err).Msg("Error funding fans, app is in a bad state")
+							}
+						}()
+					} else {
+						log.Error().Err(err).Uint64("Header", header.Number.Uint64()).Msg("Error receiving block")
+					}
 				}
 			}
 		}
@@ -158,7 +178,7 @@ func FundFans(wei *big.Int) error {
 
 func RecruitFans(count int) error {
 	for i := 0; i < count; i++ {
-		fan, err := fans.New(client)
+		fan, err := fans.New(client, IntensityLevel)
 		if err != nil {
 			return err
 		}
@@ -173,6 +193,27 @@ func FundingNonce() uint64 {
 	defer fundingNonceMu.Unlock()
 	n := fundingNonce
 	fundingNonce++
-	log.Trace().Uint64("Old", n).Uint64("New", fundingNonce).Msg("Funding nonce incremented")
 	return n
+}
+
+func SetIntensity(newLevel *big.Float) {
+	newLevelLog, _ := newLevel.Float64()
+	oldLevelLog, _ := IntensityLevel.Float64()
+	log.Debug().Float64("Old", oldLevelLog).Float64("New", newLevelLog).Msg("Setting intensity")
+	IntensityLevel = newLevel
+	for _, f := range fanClub {
+		f.Intensity = newLevel
+	}
+}
+
+func IncreaseIntensity() *big.Float {
+	newLevel := new(big.Float).Add(IntensityLevel, IntensityDelta)
+	SetIntensity(newLevel)
+	return newLevel
+}
+
+func DecreaseIntensity() *big.Float {
+	newLevel := new(big.Float).Sub(IntensityLevel, IntensityDelta)
+	SetIntensity(newLevel)
+	return newLevel
 }

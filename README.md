@@ -48,7 +48,7 @@ and see the live dashboard at `http://localhost:3333`.
 
 ## Emulating a Network Congestion Event
 
-This is the tricky bit. Gas is ultimately a market, and the price can be determined by a million factors, plus good old luck. I've done my best to find some general trends and emulate them to the best of my ability. I'm a fairly amateur data-scientist, but you can check out [my efforts](./analysis/).   I'm also looking at replicating certain notable events (e.g. crypto kitties launch) closely as possible.
+This is the tricky bit. Gas is ultimately a market, and the price can be determined by a million factors, plus good old luck. I've done my best to find some general trends and emulate them to the best of my ability. I'm a fairly amateur data-scientist, but you can check out [my efforts](./analysis/gas_trends.ipynb). I'm also looking at replicating certain notable events (e.g. crypto kitties launch) closely as possible.
 
 ## Test
 
